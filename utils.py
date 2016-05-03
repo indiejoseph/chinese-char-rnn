@@ -3,8 +3,9 @@
 import os
 import re
 import codecs
-from collections import OrderedDict
+import collections
 import cPickle
+import glob
 import numpy as np
 import progressbar as pb
 
@@ -1451,85 +1452,121 @@ def Q2B(uchar):
     return uchar
   return unichr(inside_code)
 
-def load_data(data_file, vocab_):
-  _count = 0
+def load_data(data_files):
+  seq_max = 0
+  seqs = []
+  eos = 2
+  langs = []
+  raw_data = []
+  lang_idx = []
 
-  with codecs.open(data_file, "r", "utf-8") as f:
-    data = f.read()
+  for data_file in data_files:
+    with codecs.open(data_file, "r", "utf-8") as f:
+      data = f.read()
 
-  data = normalizeUnicodes(data)
-  lines = data.split("\n")
+    lang = re.match(r".+\/([a-z0-9]+)\.txt$", data_file).group(1)
+    data = normalizeUnicodes(data)
+    lines = [line for line in data.split("\n") if len(line) > 1]
+    raw_data.append(lines)
+    langs.append(lang)
+
+  # Build vocab
+  counter = collections.Counter("".join(["".join(data) for data in raw_data]))
+  count_pairs = sorted(counter.items(), key=lambda x: -x[1])
+  chars, _ = zip(*count_pairs)
+  chars = START_VOCAB + list(chars)
+  vocab = dict(zip(chars, range(len(chars))))
+
+  for idx, data in enumerate(raw_data):
+    for line in data:
+      if len(line) <= 1:
+        continue
+      line = line.rstrip()
+      seqs.append(line)
+      lang_idx.append(idx)
+      seq_max = max(seq_max, len(line))
+
+  total_lines = len(seqs)
+  seq_max += 1 # for EOS
+  tensor = np.zeros((total_lines, seq_max))
+  unk_idx = vocab.get(UNK)
+
   pbar = pb.ProgressBar(widgets=[pb.Percentage(), pb.Bar(), pb.Timer()], maxval=1).start()
-  total_lines = float(len(lines))
-  _tensor = []
-  unk_idx = vocab_.get(UNK)
 
-  for idx, line in enumerate(lines):
-    line = line.rstrip()
-    last = [vocab_.get(c, unk_idx) for c in line]
-    _tensor += last
+  for idx2, line in enumerate(seqs):
+    vec = [vocab.get(c, unk_idx) for c in line] + [eos]
+    tensor[idx2, :len(vec)] = vec
 
     # update progressbar
-    pbar.update(idx / total_lines)
+    pbar.update(idx2 / float(total_lines))
 
-  _tensor = np.array(_tensor)
-
-  return _tensor, _count
-
-def load_vocab(vocab_file):
-  with codecs.open(vocab_file) as f:
-    _chars = cPickle.load(f)
-  _chars = START_VOCAB + _chars
-  _vocab = dict(zip(_chars, range(len(_chars))))
-  return _vocab, _chars
+  return tensor, chars, vocab, langs, lang_idx
 
 class TextLoader(object):
-  def __init__(self, data_dir, batch_size, seq_length):
+  def __init__(self, data_dir, batch_size):
     self.data_dir = data_dir
     self.batch_size = batch_size
-    self.seq_length = seq_length
 
-    input_file = os.path.join(data_dir, "input.txt")
+    input_files = glob.glob(data_dir + "/*.txt")
     vocab_file = os.path.join(data_dir, "vocab.pkl")
     tensor_file = os.path.join(data_dir, "data.npy")
+    lang_file = os.path.join(data_dir, "lang.pkl")
 
     if not (os.path.exists(vocab_file) and os.path.exists(tensor_file)):
       print "reading text file"
-      self.preprocess(input_file, vocab_file, tensor_file)
+      self.preprocess(input_files, vocab_file, tensor_file, lang_file)
     else:
       print "loading preprocessed files"
-      self.load_preprocessed(vocab_file, tensor_file)
+      self.load_preprocessed(vocab_file, tensor_file, lang_file)
     self.create_batches()
     self.reset_batch_pointer()
 
-  def preprocess(self, input_file, vocab_file, tensor_file):
-    self.vocab, self.chars = load_vocab(vocab_file)
+  def preprocess(self, input_files, vocab_file, tensor_file, lang_file):
+    self.tensor, self.chars, self.vocabs, self.langs, self.lang_idx = load_data(input_files)
     self.vocab_size = len(self.chars)
-    self.tensor, _ = load_data(input_file, self.vocab)
+    self.lang_size = len(self.langs)
+    self.seq_length = self.tensor.shape[1]
+
+    with codecs.open(lang_file, "wb") as f:
+      cPickle.dump(self.lang_idx, f)
+
+    with codecs.open(vocab_file, "wb") as f:
+      cPickle.dump(self.chars, f)
 
     np.save(tensor_file, self.tensor)
 
-  def load_preprocessed(self, vocab_file, tensor_file):
-    self.vocab, self.chars = load_vocab(vocab_file)
+  def load_preprocessed(self, vocab_file, tensor_file, lang_file):
+    with codecs.open(vocab_file) as f:
+      self.chars = cPickle.load(f)
+
+    self.vocab = dict(zip(self.chars, range(len(self.chars))))
+
+    with codecs.open(lang_file) as f:
+      self.lang_idx = cPickle.load(f)
+
+    self.langs = list(set(self.lang_idx))
     self.vocab_size = len(self.chars)
+    self.lang_size = len(self.langs)
     self.tensor = np.load(tensor_file)
-    self.num_batches = self.tensor.size / (self.batch_size * self.seq_length)
+    self.seq_length = self.tensor.shape[1]
+    self.num_batches = self.tensor.shape[0] / self.batch_size
 
   def create_batches(self):
-    self.num_batches = self.tensor.size / (self.batch_size * self.seq_length)
-    self.tensor = self.tensor[:self.num_batches * self.batch_size * self.seq_length]
+    self.num_batches = self.tensor.shape[0] / self.batch_size
+    self.tensor = self.tensor[:self.num_batches * self.batch_size]
+    self.lang_idx = np.asarray(self.lang_idx[:self.num_batches * self.batch_size])
     xdata = self.tensor
     ydata = np.copy(self.tensor)
     ydata[:-1] = xdata[1:]
     ydata[-1] = xdata[0]
-    self.x_batches = np.split(xdata.reshape(self.batch_size, -1), self.num_batches, 1)
-    self.y_batches = np.split(ydata.reshape(self.batch_size, -1), self.num_batches, 1)
-
+    self.x_batches = np.split(xdata, self.num_batches, 0)
+    self.y_batches = np.split(ydata, self.num_batches, 0)
+    self.z_batches = np.split(self.lang_idx, self.num_batches, 0)
 
   def next_batch(self):
-    x, y = self.x_batches[self.pointer], self.y_batches[self.pointer]
+    x, y, z = self.x_batches[self.pointer], self.y_batches[self.pointer], self.z_batches[self.pointer]
     self.pointer += 1
-    return x, y
+    return x, y, z
 
   def reset_batch_pointer(self):
     self.pointer = 0

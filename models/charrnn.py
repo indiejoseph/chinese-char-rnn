@@ -6,9 +6,9 @@ from tensorflow.models.rnn import rnn_cell, seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, learning_rate=0.5, batch_size=100,
-               rnn_size=512, layer_depth=2, edim=128,
+               rnn_size=512, layer_depth=2, edim=150, ldim=50, lang_size=10,
                model="gru", seq_length=50, grad_clip=5., keep_prob=0.5,
-               checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
+               checkpoint_dir="checkpoint", infer=False):
 
     Model.__init__(self)
 
@@ -21,7 +21,6 @@ class CharRNN(Model):
     self.batch_size = batch_size
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
-    self.dataset_name = dataset_name
 
     # RNN
     self.model = model
@@ -47,6 +46,7 @@ class CharRNN(Model):
 
     self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth)
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length])
+    self.langs = tf.placeholder(tf.int32, [batch_size])
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length])
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
@@ -54,12 +54,15 @@ class CharRNN(Model):
       with tf.device("/cpu:0"):
         init_width = 0.5 / edim
         self.embedding = tf.Variable(tf.random_uniform([vocab_size, edim], -init_width, init_width), name="embedding")
+        self.lang_emb = tf.Variable(tf.random_uniform([lang_size, ldim], -init_width, init_width), name="lang_embedding")
 
         # normalized embedding
         self.norm_embedding = tf.nn.l2_normalize(self.embedding, 1)
+        self.norm_lang_embed = tf.nn.l2_normalize(self.lang_emb, 1)
 
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.norm_embedding, self.input_data))
-        inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+        langs = tf.nn.embedding_lookup(self.norm_lang_embed, self.langs)
+        inputs = [tf.concat(1, [tf.squeeze(input_, [1]), langs]) for input_ in inputs]
 
     def loop(prev, _):
       prev = tf.nn.xw_plus_b(prev, softmax_w, softmax_b)
@@ -89,10 +92,12 @@ class CharRNN(Model):
     # optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars, aggregation_method=2), grad_clip)
-    self.train_op = optimizer.apply_gradients(zip(grads, tvars))
+    self.global_step = tf.Variable(0, name="global_step", trainable=False)
+    self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
-    # tf.scalar_summary("loss", self.cost)
-    # tf.scalar_summary("perplexity", tf.exp(self.cost))
+    tf.scalar_summary("loss", self.cost)
+    tf.scalar_summary("perplexity", tf.exp(self.cost))
+    self.summary = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):
     state = self.cell.zero_state(1, tf.float32).eval()
