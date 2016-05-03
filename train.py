@@ -49,13 +49,13 @@ def main(_):
   config = tf.ConfigProto()
   config.gpu_options.allocator_type = 'BFC'
   with tf.Session(config=config) as sess:
-    writer = tf.train.SummaryWriter("log", graph=sess.graph)
     model = CharRNN(sess, vocab_size, FLAGS.learning_rate, FLAGS.batch_size,
                     FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim, FLAGS.ldim, data_loader.lang_size,
                     FLAGS.model, data_loader.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, infer=infer)
 
     tf.initialize_all_variables().run()
+    writer = tf.train.SummaryWriter("log", graph=sess.graph)
 
     if FLAGS.sample:
       # load checkpoints
