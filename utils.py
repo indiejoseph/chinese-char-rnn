@@ -1538,7 +1538,6 @@ class TextLoader(object):
   def load_preprocessed(self, vocab_file, tensor_file, lang_file):
     with codecs.open(vocab_file) as f:
       self.chars = cPickle.load(f)
-
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
 
     with codecs.open(lang_file) as f:
