@@ -5,6 +5,7 @@ import re
 import codecs
 import collections
 import cPickle
+from random import shuffle
 import glob
 import numpy as np
 import progressbar as pb
@@ -1554,13 +1555,23 @@ class TextLoader(object):
     self.num_batches = self.tensor.shape[0] / self.batch_size
     self.tensor = self.tensor[:self.num_batches * self.batch_size]
     self.lang_idx = np.asarray(self.lang_idx[:self.num_batches * self.batch_size])
-    xdata = self.tensor
-    ydata = np.copy(self.tensor)
+
+    # shuffle the dataset
+    shuffle_idx = range(self.num_batches * self.batch_size)
+    shuffle(shuffle_idx)
+    xdata = []
+    zdata = []
+    for i in shuffle_idx:
+      xdata.append(self.tensor[i])
+      zdata.append(self.lang_idx[i])
+    xdata = np.asarray(xdata)
+    ydata = np.copy(xdata)
     ydata[:-1] = xdata[1:]
     ydata[-1] = xdata[0]
+    zdata = np.asarray(zdata)
     self.x_batches = np.split(xdata, self.num_batches, 0)
     self.y_batches = np.split(ydata, self.num_batches, 0)
-    self.z_batches = np.split(self.lang_idx, self.num_batches, 0)
+    self.z_batches = np.split(zdata, self.num_batches, 0)
 
   def next_batch(self):
     x, y, z = self.x_batches[self.pointer], self.y_batches[self.pointer], self.z_batches[self.pointer]
