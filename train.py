@@ -59,10 +59,10 @@ def main(_):
 
     if FLAGS.sample:
       # load checkpoints
-      if model.load(model.checkpoint_dir, model.dataset_name):
-        print(" [*] SUCCESS to load model for %s." % model.dataset_name)
+      if model.load(model.checkpoint_dir, FLAGS.dataset_name):
+        print(" [*] SUCCESS to load model for %s." % FLAGS.dataset_name)
       else:
-        print(" [!] Failed to load model for %s." % model.dataset_name)
+        print(" [!] Failed to load model for %s." % FLAGS.dataset_name)
         sys.exit(1)
 
       sample = normalizeUnicodes(FLAGS.sample)
