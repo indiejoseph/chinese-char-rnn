@@ -106,7 +106,9 @@ class CharRNN(Model):
     for char in prime[:-1]:
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
-      feed = {self.input_data: x, self.initial_state:state, self.langs: np.asarray([lang])}
+      z = np.zeros((1,), dtype=np.int32)
+      z[0] = lang
+      feed = {self.input_data: x, self.initial_state: state, self.langs: z}
       [state] = sess.run([self.final_state], feed)
 
     def weighted_pick(weights):
