@@ -45,9 +45,9 @@ class CharRNN(Model):
       cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=self.keep_prob)
 
     self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth)
-    self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length])
-    self.langs = tf.placeholder(tf.int32, [batch_size])
-    self.targets = tf.placeholder(tf.int32, [batch_size, seq_length])
+    self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="input_data")
+    self.langs = tf.placeholder(tf.int32, [batch_size], name="langs")
+    self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope('rnnlm'):
@@ -106,7 +106,7 @@ class CharRNN(Model):
     for char in prime[:-1]:
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
-      feed = {self.input_data: x, self.initial_state:state, self.langs: [lang]}
+      feed = {self.input_data: x, self.initial_state:state, self.langs: np.asarray([lang])}
       [state] = sess.run([self.final_state], feed)
 
     def weighted_pick(weights):
