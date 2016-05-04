@@ -122,7 +122,7 @@ class CharRNN(Model):
     for n in xrange(num):
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
-	  z = np.zeros((1,), dtype=np.int32)
+      z = np.zeros((1,), dtype=np.int32)
       z[0] = lang
       feed = {self.input_data: x, self.initial_state:state, self.langs: z}
       [probs, state] = sess.run([self.probs, self.final_state], feed)
