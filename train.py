@@ -20,10 +20,11 @@ flags.DEFINE_integer("ldim", 50, "The dimension of language embedding matrix [50
 flags.DEFINE_integer("rnn_size", 200, "The size of state for RNN [200]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
 flags.DEFINE_integer("batch_size", 30, "The size of batch [30]")
-flags.DEFINE_float("learning_rate", 1e-4, "Learning rate [1e-4]")
+flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
+flags.DEFINE_float("decay_rate", 0.97, "decay rate for optimizer")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
-flags.DEFINE_string("model", "gru", "rnn, lstm or gru")
+flags.DEFINE_string("model", "lstm", "rnn, lstm or gru")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -78,6 +79,7 @@ def main(_):
 
     else: # Train
       for e in xrange(FLAGS.num_epochs):
+        sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
         data_loader.reset_batch_pointer()
         state = model.initial_state.eval()
         for b in xrange(data_loader.num_batches):
