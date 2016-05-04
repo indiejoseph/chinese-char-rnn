@@ -15,9 +15,9 @@ pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("edim", 150, "The dimension of char embedding matrix [150]")
+flags.DEFINE_integer("edim", 100, "The dimension of char embedding matrix [100]")
 flags.DEFINE_integer("ldim", 50, "The dimension of language embedding matrix [50]")
-flags.DEFINE_integer("rnn_size", 600, "The size of state for RNN [600]")
+flags.DEFINE_integer("rnn_size", 400, "The size of state for RNN [400]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
 flags.DEFINE_integer("batch_size", 30, "The size of batch [30]")
 flags.DEFINE_float("learning_rate", 1e-4, "Learning rate [1e-4]")
@@ -29,7 +29,7 @@ flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("sample", "", "sample")
-flags.DEFINE_integer("lang", 0, "language")
+flags.DEFINE_integer("lang", 0, "language") # 0 = eng
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
 
@@ -67,7 +67,7 @@ def main(_):
         sys.exit(1)
 
       sample = normalizeUnicodes(FLAGS.sample)
-      print model.sample(sess, data_loader.chars, data_loader.vocab, 200, sample, FLAGS.lang) # 0 = eng
+      print model.sample(sess, data_loader.chars, data_loader.vocab, 200, sample, FLAGS.lang)
 
     elif FLAGS.export:
       print("Eval...")
