@@ -99,14 +99,14 @@ class CharRNN(Model):
     tf.scalar_summary("perplexity", tf.exp(self.cost))
     self.summary = tf.merge_all_summaries()
 
-  def sample(self, sess, chars, vocab, num=200, prime='The '):
+  def sample(self, sess, chars, vocab, num=200, prime='The ', lang=0):
     state = self.cell.zero_state(1, tf.float32).eval()
     prime = prime.decode('utf-8')
 
     for char in prime[:-1]:
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
-      feed = {self.input_data: x, self.initial_state:state}
+      feed = {self.input_data: x, self.initial_state:state, self.langs: [lang]}
       [state] = sess.run([self.final_state], feed)
 
     def weighted_pick(weights):

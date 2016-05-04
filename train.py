@@ -66,7 +66,7 @@ def main(_):
         sys.exit(1)
 
       sample = normalizeUnicodes(FLAGS.sample)
-      print model.sample(sess, data_loader.chars, data_loader.vocab, 200, sample)
+      print model.sample(sess, data_loader.chars, data_loader.vocab, 200, sample, 0) # 0 = eng
 
     elif FLAGS.export:
       print("Eval...")
