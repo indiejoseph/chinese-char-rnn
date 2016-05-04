@@ -29,6 +29,7 @@ flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("sample", "", "sample")
+flags.DEFINE_integer("lang", 0, "language")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
 
