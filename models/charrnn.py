@@ -55,13 +55,8 @@ class CharRNN(Model):
         init_width = 0.5 / edim
         self.embedding = tf.Variable(tf.random_uniform([vocab_size, edim], -init_width, init_width), name="embedding")
         self.lang_emb = tf.Variable(tf.random_uniform([lang_size, ldim], -init_width, init_width), name="lang_embedding")
-
-        # normalized embedding
-        self.norm_embedding = tf.nn.l2_normalize(self.embedding, 1)
-        self.norm_lang_embed = tf.nn.l2_normalize(self.lang_emb, 1)
-
-        inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.norm_embedding, self.input_data))
-        langs = tf.nn.embedding_lookup(self.norm_lang_embed, self.langs)
+        inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
+        langs = tf.nn.embedding_lookup(self.lang_emb, self.langs)
         inputs = [tf.concat(1, [tf.squeeze(input_, [1]), langs]) for input_ in inputs]
 
     def loop(prev, _):
