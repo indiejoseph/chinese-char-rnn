@@ -20,7 +20,7 @@ flags.DEFINE_integer("ldim", 50, "The dimension of language embedding matrix [50
 flags.DEFINE_integer("rnn_size", 200, "The size of state for RNN [200]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
 flags.DEFINE_integer("batch_size", 30, "The size of batch [30]")
-flags.DEFINE_float("learning_rate", 0.01, "Learning rate [0.01]")
+flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
 flags.DEFINE_float("decay_rate", 0.97, "decay rate for optimizer")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
