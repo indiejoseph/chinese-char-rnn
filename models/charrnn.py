@@ -52,9 +52,8 @@ class CharRNN(Model):
 
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
-        init_width = 0.5 / edim
-        self.embedding = tf.Variable(tf.random_uniform([vocab_size, edim], -init_width, init_width), name="embedding")
-        self.lang_emb = tf.Variable(tf.random_uniform([lang_size, ldim], -init_width, init_width), name="lang_embedding")
+        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size])
+        self.lang_emb = tf.get_variable("lang_embedding", [vocab_size, rnn_size])
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         langs = tf.nn.embedding_lookup(self.lang_emb, self.langs)
         inputs = [tf.concat(1, [tf.squeeze(input_, [1]), langs]) for input_ in inputs]
@@ -67,12 +66,12 @@ class CharRNN(Model):
     with tf.variable_scope('output'):
       softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
-      outputs, self.final_state = seq2seq.rnn_decoder(inputs, # [seq_length, batch_size, edim]
+      outputs, self.final_state = seq2seq.rnn_decoder(inputs, # [(batch_size, edim)] * seq_length
                                                       self.initial_state, cell,
                                                       loop_function=loop if infer else None,
                                                       scope='rnnlm')
-      output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size]) # [seq_length * batch_size, edim]
-      self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b)
+      output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size]) # [(batch_size, edim)] * seq_length
+      self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
     with tf.variable_scope('losses'):
@@ -83,11 +82,11 @@ class CharRNN(Model):
       self.cost = tf.reduce_sum(losses) / batch_size / seq_length
 
     self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
-    tvars = tf.trainable_variables()
-    # optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
-    optimizer = tf.train.AdamOptimizer(self.learning_rate)
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars, aggregation_method=2), grad_clip)
     self.global_step = tf.Variable(0, name="global_step", trainable=False)
+    tvars = tf.trainable_variables()
+    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+    # optimizer = tf.train.AdamOptimizer(self.learning_rate)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
     tf.scalar_summary("loss", self.cost)
