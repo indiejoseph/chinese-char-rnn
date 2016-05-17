@@ -17,7 +17,6 @@ class CharRNN(Model):
       seq_length = 1
 
     self.sess = sess
-
     self.batch_size = batch_size
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
@@ -51,12 +50,23 @@ class CharRNN(Model):
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope('rnnlm'):
+      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
+      softmax_b = tf.get_variable("softmax_b", [vocab_size])
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size])
-        self.lang_emb = tf.get_variable("lang_embedding", [vocab_size, rnn_size])
+        self.embedding = tf.get_variable("embedding",
+                                         [vocab_size, edim],
+                                         initializer=tf.truncated_normal_initializer(mean=0.0, stddev=1./edim),
+                                         dtype=tf.float32)
+        self.lang_emb = tf.get_variable("lang_embedding",
+                                         [vocab_size, lang_size],
+                                         initializer=tf.truncated_normal_initializer(mean=0.0, stddev=1./ldim),
+                                         dtype=tf.float32)
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         langs = tf.nn.embedding_lookup(self.lang_emb, self.langs)
         inputs = [tf.concat(1, [tf.squeeze(input_, [1]), langs]) for input_ in inputs]
+
+    if not infer and self.keep_prob < 1:
+      inputs = [tf.nn.dropout(input_, self.keep_prob) for input_ in inputs]
 
     def loop(prev, _):
       prev = tf.nn.xw_plus_b(prev, softmax_w, softmax_b)
@@ -64,8 +74,6 @@ class CharRNN(Model):
       return tf.nn.embedding_lookup(self.embedding, prev_symbol)
 
     with tf.variable_scope('output'):
-      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
-      softmax_b = tf.get_variable("softmax_b", [vocab_size])
       outputs, self.final_state = seq2seq.rnn_decoder(inputs, # [(batch_size, edim)] * seq_length
                                                       self.initial_state, cell,
                                                       loop_function=loop if infer else None,
@@ -84,8 +92,10 @@ class CharRNN(Model):
     self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
     self.global_step = tf.Variable(0, name="global_step", trainable=False)
     tvars = tf.trainable_variables()
-    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
-    # optimizer = tf.train.AdamOptimizer(self.learning_rate)
+    # optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+    optimizer = tf.train.AdamOptimizer(self.learning_rate)
+    # optimizer = tf.train.AdadeltaOptimizer(self.learning_rate)
+    # optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
@@ -94,7 +104,7 @@ class CharRNN(Model):
     self.summary = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The ', lang=0):
-    state = self.cell.zero_state(1, tf.float32).eval()
+    state = self.cell.zero_state(1, tf.float32).eval(session=sess)
     prime = prime.decode('utf-8')
 
     for char in prime[:-1]:

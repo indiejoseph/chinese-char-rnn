@@ -8,6 +8,7 @@ import cPickle
 from random import shuffle
 import glob
 import numpy as np
+import sys
 import progressbar as pb
 
 PAD = "_PAD"
@@ -1560,18 +1561,32 @@ class TextLoader(object):
     shuffle_idx = range(self.num_batches * self.batch_size)
     shuffle(shuffle_idx)
     xdata = []
+    ydata = []
     zdata = []
     for i in shuffle_idx:
-      xdata.append(self.tensor[i])
+      x = self.tensor[i]
+      xdata.append(x)
+      y = np.copy(x)
+      y[:-1] = x[1:]
+      y[-1] = x[0]
+      ydata.append(y)
       zdata.append(self.lang_idx[i])
     xdata = np.asarray(xdata)
-    ydata = np.copy(xdata)
-    ydata[:-1] = xdata[1:]
-    ydata[-1] = xdata[0]
+    ydata = np.asarray(ydata)
     zdata = np.asarray(zdata)
     self.x_batches = np.split(xdata, self.num_batches, 0)
     self.y_batches = np.split(ydata, self.num_batches, 0)
     self.z_batches = np.split(zdata, self.num_batches, 0)
+    self.x_valid = self.x_batches[-1]
+    self.y_valid = self.y_batches[-1]
+    self.z_valid = self.z_batches[-1]
+    self.x_batches = self.x_batches[:-1]
+    self.y_batches = self.y_batches[:-1]
+    self.z_batches = self.z_batches[:-1]
+    self.num_batches = self.num_batches - 1
+
+  def get_valid(self):
+    return self.x_valid, self.y_valid, self.z_valid
 
   def next_batch(self):
     x, y, z = self.x_batches[self.pointer], self.y_batches[self.pointer], self.z_batches[self.pointer]
