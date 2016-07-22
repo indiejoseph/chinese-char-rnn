@@ -3,10 +3,10 @@
 import os
 import re
 import codecs
-from collections import OrderedDict
+import collections
 import cPickle
 import numpy as np
-import progressbar as pb
+
 
 PAD = "_PAD"
 GO = "_GO"
@@ -15,6 +15,7 @@ UNK = "_UNK"
 SPACE = " "
 NEW_LINE = "\n"
 START_VOCAB = [PAD, GO, EOS, UNK, SPACE, NEW_LINE]
+
 
 def normalizeUnicode(text):
   t = {u"\u00A8": u"\u0020\u0308",
@@ -1398,10 +1399,12 @@ def normalizeUnicode(text):
 
   return replace_all(t, text)
 
+
 def replace_all(repls, text):
   # return re.sub('|'.join(repls.keys()), lambda k: repls[k.group(0)], text)
   return re.sub(u'|'.join(re.escape(key) for key in repls.keys()),
                 lambda k: repls[k.group(0)], text)
+
 
 def normalizeUnicodes(text):
   text = normalizePunctuation(text)
@@ -1409,6 +1412,7 @@ def normalizeUnicodes(text):
   text = "".join([Q2B(c) for c in list(text)])
 
   return text
+
 
 def normalizePunctuation(text):
   cpun = [['	'],
@@ -1439,6 +1443,7 @@ def normalizePunctuation(text):
 
   return replace_all(repls, text)
 
+
 def Q2B(uchar):
   """全角转半角"""
   inside_code = ord(uchar)
@@ -1451,43 +1456,13 @@ def Q2B(uchar):
     return uchar
   return unichr(inside_code)
 
-def load_data(data_file, vocab_):
-  _count = 0
 
-  with codecs.open(data_file, "r", "utf-8") as f:
-    data = f.read()
-
-  data = normalizeUnicodes(data)
-  lines = data.split("\n")
-  pbar = pb.ProgressBar(widgets=[pb.Percentage(), pb.Bar(), pb.Timer()], maxval=1).start()
-  total_lines = float(len(lines))
-  _tensor = []
-  unk_idx = vocab_.get(UNK)
-
-  for idx, line in enumerate(lines):
-    line = line.rstrip()
-    last = [vocab_.get(c, unk_idx) for c in line]
-    _tensor += last
-
-    # update progressbar
-    pbar.update(idx / total_lines)
-
-  _tensor = np.array(_tensor)
-
-  return _tensor, _count
-
-def load_vocab(vocab_file):
-  with codecs.open(vocab_file) as f:
-    _chars = cPickle.load(f)
-  _chars = START_VOCAB + _chars
-  _vocab = dict(zip(_chars, range(len(_chars))))
-  return _vocab, _chars
-
-class TextLoader(object):
-  def __init__(self, data_dir, batch_size, seq_length):
+class TextLoader():
+  def __init__(self, data_dir, batch_size, seq_length, encoding="utf-8"):
     self.data_dir = data_dir
     self.batch_size = batch_size
     self.seq_length = seq_length
+    self.encoding = encoding
 
     input_file = os.path.join(data_dir, "input.txt")
     vocab_file = os.path.join(data_dir, "vocab.pkl")
@@ -1503,20 +1478,36 @@ class TextLoader(object):
     self.reset_batch_pointer()
 
   def preprocess(self, input_file, vocab_file, tensor_file):
-    self.vocab, self.chars = load_vocab(vocab_file)
+    with codecs.open(input_file, "r", encoding=self.encoding) as f:
+      data = f.read()
+      data = normalizeUnicodes(data)
+    counter = collections.Counter(data)
+    count_pairs = sorted(counter.items(), key=lambda x: -x[1])
+    self.chars, _ = zip(*count_pairs)
     self.vocab_size = len(self.chars)
-    self.tensor, _ = load_data(input_file, self.vocab)
-
+    self.vocab = dict(zip(self.chars, range(len(self.chars))))
+    with open(vocab_file, 'wb') as f:
+      cPickle.dump(self.chars, f)
+    self.tensor = np.array(list(map(self.vocab.get, data)))
     np.save(tensor_file, self.tensor)
 
   def load_preprocessed(self, vocab_file, tensor_file):
-    self.vocab, self.chars = load_vocab(vocab_file)
+    with open(vocab_file, 'rb') as f:
+      self.chars = cPickle.load(f)
     self.vocab_size = len(self.chars)
+    self.vocab = dict(zip(self.chars, range(len(self.chars))))
     self.tensor = np.load(tensor_file)
-    self.num_batches = self.tensor.size / (self.batch_size * self.seq_length)
+    self.num_batches = int(self.tensor.size / (self.batch_size *
+                           self.seq_length))
 
   def create_batches(self):
-    self.num_batches = self.tensor.size / (self.batch_size * self.seq_length)
+    self.num_batches = int(self.tensor.size / (self.batch_size *
+                           self.seq_length))
+
+    # When the data (tesor) is too small, let's give them a better error message
+    if self.num_batches==0:
+      assert False, "Not enough data. Make seq_length and batch_size small."
+
     self.tensor = self.tensor[:self.num_batches * self.batch_size * self.seq_length]
     xdata = self.tensor
     ydata = np.copy(self.tensor)
