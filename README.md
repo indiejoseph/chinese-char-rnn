@@ -2,4 +2,4 @@
 http://arxiv.org/abs/1410.4615
 
 ### Requirements
-tensorflow 0.7.1
+tensorflow 0.9.0

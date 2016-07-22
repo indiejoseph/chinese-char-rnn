@@ -2,7 +2,7 @@ import sys
 from base import Model
 import tensorflow as tf
 import numpy as np
-from tensorflow.models.rnn import rnn_cell, seq2seq
+from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, learning_rate=0.5, batch_size=100,
