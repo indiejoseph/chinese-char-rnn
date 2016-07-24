@@ -95,7 +95,7 @@ def main(_):
           end = time.time()
           costs = np.append(costs, train_cost)[-FLAGS.save_every:]
 
-          print "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}, lr = {:.3f}" \
+          print "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}, lr = {:.5f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
                       e, train_cost, end - start, learning_rate)
@@ -105,7 +105,7 @@ def main(_):
             total_cost = costs.mean()
             if total_cost >= last_cost:
               learning_rate = learning_rate * FLAGS.decay_rate
-              sess.run(tf.assign(model.lr, learning_rate))
+              sess.run(tf.assign(model.learning_rate, learning_rate))
               print 'update learning rate: ' + learning_rate
             last_cost = total_cost
 
