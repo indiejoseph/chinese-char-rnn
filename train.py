@@ -19,10 +19,10 @@ flags.DEFINE_integer("edim", 200, "The dimension of char embedding matrix [200]"
 flags.DEFINE_integer("ldim", 100, "The dimension of language embedding matrix [100]")
 flags.DEFINE_integer("rnn_size", 900, "The size of state for RNN [900]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
-flags.DEFINE_integer("batch_size", 10, "The size of batch [10]")
+flags.DEFINE_integer("batch_size", 30, "The size of batch [30]")
 flags.DEFINE_float("learning_rate", 2e-3, "Learning rate [2e-3]")
 flags.DEFINE_float("decay_rate", 0.97, "decay rate for optimizer [0.97]")
-flags.DEFINE_float("keep_prob", 1, "Dropout rate")
+flags.DEFINE_float("keep_prob", .5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_string("model", "lstm", "rnn, lstm or gru")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
@@ -65,8 +65,8 @@ def main(_):
   sess.run(init)
   tf.train.start_queue_runners(sess=sess)
 
-  writer = tf.train.SummaryWriter("log", graph=sess.graph)
-  tf.train.write_graph(sess.graph_def, 'log', 'graph.pb', as_text=True)
+  writer = tf.train.SummaryWriter("log", sess.graph)
+  tf.train.write_graph(sess.graph, 'log', 'graph.pb', as_text=True)
 
   if FLAGS.sample:
     # load checkpoints
@@ -88,6 +88,7 @@ def main(_):
 
   else: # Train
     x_valid, y_valid, z_valid = data_loader.get_valid()
+    valid_cost = 0
 
     for e in xrange(FLAGS.num_epochs):
       sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
@@ -103,10 +104,10 @@ def main(_):
 
         writer.add_summary(summary, step)
 
-        print "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}" \
+        print "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}, valid = {:.3f}" \
             .format(e * data_loader.num_batches + b,
                     FLAGS.num_epochs * data_loader.num_batches,
-                    e, train_cost, end - start)
+                    e, train_cost, end - start, valid_cost)
 
         if step % FLAGS.save_every == 0:
           model.save(FLAGS.checkpoint_dir, FLAGS.dataset_name)
@@ -116,9 +117,7 @@ def main(_):
           state = model.initial_state.eval(session=sess) # fresh state for each sentence
           feed = {model.input_data: x_valid, model.targets: y_valid, model.langs: z_valid, model.initial_state: state}
           output = sess.run([model.cost], feed)
-          cost = output[0]
-
-          print "*** validate = {:.3f} ***".format(cost)
+          valid_cost = output[0]
 
 if __name__ == '__main__':
   tf.app.run()
