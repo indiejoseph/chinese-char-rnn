@@ -106,7 +106,7 @@ def main(_):
             if total_cost >= last_cost:
               learning_rate = learning_rate * FLAGS.decay_rate
               sess.run(tf.assign(model.learning_rate, learning_rate))
-              print 'update learning rate: ' + learning_rate
+              print "update learning rate: {:.5f}".format(learning_rate)
             last_cost = total_cost
 
             # save to checkpoint
