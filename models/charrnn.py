@@ -5,7 +5,7 @@ import numpy as np
 from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
-  def __init__(self, sess, vocab_size, learning_rate=0.5, batch_size=100,
+  def __init__(self, sess, vocab_size, batch_size=100,
                rnn_size=512, layer_depth=2, edim=128,
                model="gru", seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
@@ -84,7 +84,7 @@ class CharRNN(Model):
                                                 vocab_size)
       self.cost = tf.reduce_sum(losses) / batch_size / seq_length
 
-    self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
+    self.learning_rate = tf.Variable(0.0, trainable=False)
     tvars = tf.trainable_variables()
     # optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
     optimizer = tf.train.AdamOptimizer(self.learning_rate)

@@ -18,9 +18,10 @@ flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
 flags.DEFINE_integer("edim", 128, "The dimension of char embedding matrix [128]")
 flags.DEFINE_integer("rnn_size", 1024, "The size of state for RNN")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
-flags.DEFINE_integer("batch_size", 30, "The size of batch [30]")
-flags.DEFINE_integer("seq_length", 30, "The # of timesteps to unroll for [30]")
-flags.DEFINE_float("learning_rate", 1e-4, "Learning rate [1e-4]")
+flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
+flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
+flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
+flags.DEFINE_float("decay_rate", 0.95, "Decay of SGD [0.95]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_string("model", "gru", "rnn, lstm or gru")
@@ -50,7 +51,7 @@ def main(_):
   config = tf.ConfigProto()
   config.gpu_options.allocator_type = 'BFC'
   with tf.Session(config=config) as sess:
-    model = CharRNN(sess, vocab_size, FLAGS.learning_rate, FLAGS.batch_size,
+    model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                     FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim,
                     FLAGS.model, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
@@ -76,22 +77,39 @@ def main(_):
       np.save(emb_file, final_embeddings)
 
     else: # Train
+      # assign learning rate to model
+      sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate))
+      learning_rate = FLAGS.learning_rate
+      last_cost = 100
+      costs = []
+
       for e in xrange(FLAGS.num_epochs):
         data_loader.reset_batch_pointer()
         state = model.initial_state.eval()
+
         for b in xrange(data_loader.num_batches):
           start = time.time()
           x, y = data_loader.next_batch()
           feed = {model.input_data: x, model.targets: y, model.initial_state: state}
           train_cost, state, _ = sess.run([model.cost, model.final_state, model.train_op], feed)
           end = time.time()
+          costs = np.append(costs, train_cost)[-FLAGS.save_every:]
 
-          print "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}" \
+          print "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}, lr = {:.3f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, end - start)
+                      e, train_cost, end - start, learning_rate)
 
           if (e * data_loader.num_batches + b) % FLAGS.save_every == 0:
+            # update learning rate
+            total_cost = costs.mean()
+            if total_cost >= last_cost:
+              learning_rate = learning_rate * FLAGS.decay_rate
+              sess.run(tf.assign(model.lr, learning_rate))
+              print 'update learning rate: ' + learning_rate
+            last_cost = total_cost
+
+            # save to checkpoint
             model.save(FLAGS.checkpoint_dir, FLAGS.dataset_name)
             print "model saved to {}".format(FLAGS.checkpoint_dir)
 
