@@ -24,6 +24,7 @@ flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay of SGD [0.95]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
+flags.DEFINE_integer("summary_every", 100, "Write summary every")
 flags.DEFINE_string("model", "gru", "rnn, lstm or gru")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
@@ -100,7 +101,10 @@ def main(_):
              model.train_op], feed)
           end = time.time()
           costs = np.append(costs, train_cost)[-FLAGS.save_every:]
-          writer.add_summary(summary, step)
+
+          if step % FLAGS.summary_every == 0:
+            writer.add_summary(summary, step)
+
           step += 1
 
           print "{}/{} (epoch {}), train_loss = {:.2f}, perplexity = {:.2f}, time/batch = {:.2f}, lr = {:.4f}" \
