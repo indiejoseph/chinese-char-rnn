@@ -7,7 +7,7 @@ from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               rnn_size=512, layer_depth=2, edim=128,
+               rnn_size=512, layer_depth=2, edim=128, l2=0.0004,
                model="gru", use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -23,6 +23,7 @@ class CharRNN(Model):
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
+    self.l2 = l2
 
     # RNN
     self.model = model
@@ -79,15 +80,21 @@ class CharRNN(Model):
       self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b)
       self.probs = tf.nn.softmax(self.logits)
 
-    with tf.variable_scope('losses'):
-      self.loss = seq2seq.sequence_loss_by_example([self.logits],
-                                                [tf.reshape(self.targets, [-1])],
-                                                [tf.ones([batch_size * seq_length])],
-                                                vocab_size)
-      self.cost = tf.div(tf.div(tf.reduce_sum(self.loss), batch_size), seq_length)
-
     self.learning_rate = tf.Variable(0.0, trainable=False)
+
+    seq_loss = seq2seq.sequence_loss_by_example([self.logits],
+                                              [tf.reshape(self.targets, [-1])],
+                                              [tf.ones([batch_size * seq_length])],
+                                              vocab_size)
     tvars = tf.trainable_variables()
+    if self.l2 > 0:
+      self.l2_loss = sum([tf.contrib.layers.l2_regularizer(self.l2)(tvar) for tvar in tvars])
+    else:
+      self.l2_loss = 0
+
+    self.loss = tf.reduce_mean(seq_loss)
+    self.cost = self.loss + self.l2_loss
+
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars))
