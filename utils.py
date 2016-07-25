@@ -1417,7 +1417,7 @@ def normalizeUnicodes(text):
 def normalizePunctuation(text):
   cpun = [['	'],
           [u'﹗'],
-          [u'“', u'゛'],
+          [u'“', u'゛', u'〃', u'′'],
           [u'”'],
           [u'´', u'‘', u'’'],
           [u'；', u'﹔'],
@@ -1432,7 +1432,7 @@ def normalizePunctuation(text):
           [u'︰', u'﹕'],
           [u'・', u'．', u'·', u'･', u'‧'],
           [u'●', u'○', u'▲', u'◎', u'◇', u'■', u'□', u'※', u'◆'],
-          [u'〜', u'～'],
+          [u'〜', u'～', u'∼'],
           [u'—', u'ー', u'―', u'‐', u'−', u'─', u'﹣', u'–']]
   epun = [u' ', u'！', u'"', u'"', u'\'', u';', u'<', u'>', u'、', u'[', u']', u'(', u')', u'？', u'：', u'･', u'•', u'~', u'-']
   repls = {}
@@ -1483,12 +1483,15 @@ class TextLoader():
       data = normalizeUnicodes(data)
     counter = collections.Counter(data)
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
-    self.chars, _ = zip(*count_pairs)
+    self.chars, counts = zip(*count_pairs)
+    threshold = 5
+    self.chars = [c for i, c in enumerate(self.chars) if counts[i] > threshold]
     self.vocab_size = len(self.chars)
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
     with open(vocab_file, 'wb') as f:
       cPickle.dump(self.chars, f)
-    self.tensor = np.array(list(map(self.vocab.get, data)))
+    unk_index = START_VOCAB.index(UNK)
+    self.tensor = np.array([self.vocab.get(c, unk_index) for c in data])
     np.save(tensor_file, self.tensor)
 
   def load_preprocessed(self, vocab_file, tensor_file):
