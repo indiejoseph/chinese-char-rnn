@@ -55,8 +55,6 @@ class CharRNN(Model):
         init_width = 0.5 / edim
         self.embedding = tf.Variable(tf.random_uniform([vocab_size, edim], -init_width, init_width), name="embedding")
 
-        tf.histogram_summary("char embedding", self.embedding)
-
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
@@ -68,9 +66,6 @@ class CharRNN(Model):
     with tf.variable_scope('output'):
       softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
-
-      tf.histogram_summary("softmax_w", softmax_w)
-      tf.histogram_summary("softmax_b", softmax_b)
 
       outputs, self.final_state = seq2seq.rnn_decoder(inputs, # [seq_length, batch_size, edim]
                                                       self.initial_state, cell,
