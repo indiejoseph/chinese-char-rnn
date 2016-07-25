@@ -58,7 +58,8 @@ class CharRNN(Model):
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
         init_width = 0.5 / edim
-        self.embedding = tf.Variable(tf.random_uniform([vocab_size, edim], -init_width, init_width), name="embedding")
+        self.embedding = tf.get_variable("embedding", [vocab_size, edim],
+                                         initializer=tf.contrib.layers.xavier_initializer(uniform=True))
 
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
@@ -69,7 +70,8 @@ class CharRNN(Model):
       return tf.nn.embedding_lookup(self.embedding, prev_symbol)
 
     with tf.variable_scope('output'):
-      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
+      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size],
+                                  initializer=tf.contrib.layers.xavier_initializer(uniform=True))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       outputs, self.final_state = seq2seq.rnn_decoder(inputs, # [seq_length, batch_size, edim]
