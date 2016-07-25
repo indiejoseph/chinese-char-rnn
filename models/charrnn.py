@@ -2,12 +2,13 @@ import sys
 from base import Model
 import tensorflow as tf
 import numpy as np
+import mi_rnn_cell
 from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
                rnn_size=512, layer_depth=2, edim=128,
-               model="gru", seq_length=50, grad_clip=5., keep_prob=0.5,
+               model="gru", use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
     Model.__init__(self)
@@ -31,21 +32,24 @@ class CharRNN(Model):
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
 
-    if model == 'rnn':
+    if model == "rnn":
       cell_fn = rnn_cell.BasicRNNCell
-    elif model == 'gru':
-      cell_fn = rnn_cell.GRUCell
-    elif model == 'lstm':
-      cell_fn = rnn_cell.BasicLSTMCell
+    elif model == "gru":
+      cell_fn = mi_rnn_cell.MIGRUCell
+    elif model == "lstm":
+      cell_fn = mi_rnn_cell.MILSTMCell
     else:
       raise Exception("model type not supported: {}".format(model))
 
-    cell = cell_fn(rnn_size)
+    if model == "lstm" and use_peepholes:
+      cell = cell_fn(rnn_size, use_peepholes=True, state_is_tuple=True)
+    else:
+      cell = cell_fn(rnn_size)
 
     if not infer and self.keep_prob < 1:
       cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=self.keep_prob)
 
-    self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth)
+    self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length])
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length])
     self.initial_state = cell.zero_state(batch_size, tf.float32)
