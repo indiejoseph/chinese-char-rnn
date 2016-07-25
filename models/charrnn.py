@@ -91,7 +91,7 @@ class CharRNN(Model):
     l2_reg += tf.nn.l2_loss(softmax_w)
     l2_reg += tf.nn.l2_loss(softmax_b)
 
-    self.cost = tf.add(tf.div(tf.div(tf.reduce_sum(self.loss), batch_size), seq_length), self.l2_reg_lambda * l2_reg)
+    self.cost = (tf.reduce_sum(self.loss) / batch_size / seq_length) + (self.l2_reg_lambda * l2_reg)
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
