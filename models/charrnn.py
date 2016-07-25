@@ -7,7 +7,7 @@ from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               rnn_size=512, layer_depth=2, edim=128, l2_reg_lambda=1e-4,
+               rnn_size=512, layer_depth=2, edim=128,
                model="gru", use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -23,7 +23,6 @@ class CharRNN(Model):
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
-    self.l2_reg_lambda = l2_reg_lambda
 
     # RNN
     self.model = model
@@ -57,7 +56,6 @@ class CharRNN(Model):
 
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
-        init_width = 0.5 / edim
         self.embedding = tf.get_variable("embedding", [vocab_size, edim],
                                          initializer=tf.contrib.layers.xavier_initializer(uniform=True))
 
@@ -82,16 +80,12 @@ class CharRNN(Model):
       self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b)
       self.probs = tf.nn.softmax(self.logits)
 
-    l2_reg = tf.constant(0.0)
     self.learning_rate = tf.Variable(0.0, trainable=False)
     self.loss = seq2seq.sequence_loss_by_example([self.logits],
                                               [tf.reshape(self.targets, [-1])],
                                               [tf.ones([batch_size * seq_length])],
                                               vocab_size)
-    l2_reg += tf.nn.l2_loss(softmax_w)
-    l2_reg += tf.nn.l2_loss(softmax_b)
-
-    self.cost = (tf.reduce_sum(self.loss) / batch_size / seq_length) + (self.l2_reg_lambda * l2_reg)
+    self.cost = (tf.reduce_sum(self.loss) / batch_size / seq_length)
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
