@@ -55,10 +55,9 @@ class CharRNN(Model):
         init_width = 0.5 / edim
         self.embedding = tf.Variable(tf.random_uniform([vocab_size, edim], -init_width, init_width), name="embedding")
 
-        # normalized embedding
-        self.norm_embedding = tf.nn.l2_normalize(self.embedding, 1)
+        tf.histogram_summary("char embedding", self.embedding)
 
-        inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.norm_embedding, self.input_data))
+        inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
     def loop(prev, _):
@@ -69,6 +68,10 @@ class CharRNN(Model):
     with tf.variable_scope('output'):
       softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
+
+      tf.histogram_summary("softmax_w", softmax_w)
+      tf.histogram_summary("softmax_b", softmax_b)
+
       outputs, self.final_state = seq2seq.rnn_decoder(inputs, # [seq_length, batch_size, edim]
                                                       self.initial_state, cell,
                                                       loop_function=loop if infer else None,
@@ -78,21 +81,24 @@ class CharRNN(Model):
       self.probs = tf.nn.softmax(self.logits)
 
     with tf.variable_scope('losses'):
-      losses = seq2seq.sequence_loss_by_example([self.logits],
+      self.loss = seq2seq.sequence_loss_by_example([self.logits],
                                                 [tf.reshape(self.targets, [-1])],
                                                 [tf.ones([batch_size * seq_length])],
                                                 vocab_size)
-      self.cost = tf.reduce_sum(losses) / batch_size / seq_length
+      self.cost = tf.div(tf.div(tf.reduce_sum(self.loss), batch_size), seq_length)
 
     self.learning_rate = tf.Variable(0.0, trainable=False)
     tvars = tf.trainable_variables()
-    # optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars, aggregation_method=2), grad_clip)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars))
+    self.perplexity = tf.exp(self.cost / seq_length)
 
-    # tf.scalar_summary("loss", self.cost)
-    # tf.scalar_summary("perplexity", tf.exp(self.cost))
+    tf.scalar_summary("learning rate", self.learning_rate)
+    tf.scalar_summary("cost", self.cost)
+    tf.histogram_summary("loss", self.loss)
+    tf.scalar_summary("perplexity", self.perplexity)
+    self.merged = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):
     state = self.cell.zero_state(1, tf.float32).eval()
@@ -112,7 +118,7 @@ class CharRNN(Model):
     ret = prime
     char = prime[-1]
 
-    for n in xrange(num):
+    for _ in xrange(num):
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
       feed = {self.input_data: x, self.initial_state:state}

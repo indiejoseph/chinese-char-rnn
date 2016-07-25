@@ -19,7 +19,7 @@ flags.DEFINE_integer("edim", 128, "The dimension of char embedding matrix [128]"
 flags.DEFINE_integer("rnn_size", 1024, "The size of state for RNN")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
-flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
+flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay of SGD [0.95]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
@@ -28,13 +28,14 @@ flags.DEFINE_string("model", "gru", "rnn, lstm or gru")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
+flags.DEFINE_string("log_dir", "log", "Log directory [log]")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("sample", "", "sample")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
 
 def main(_):
-  pp.pprint(flags.FLAGS.__flags)
+  pp.pprint(FLAGS.__flags)
 
   if not os.path.exists(FLAGS.checkpoint_dir):
     print(" [*] Creating checkpoint directory...")
@@ -48,14 +49,15 @@ def main(_):
   data_loader = TextLoader(os.path.join(FLAGS.data_dir, FLAGS.dataset_name),
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
-  config = tf.ConfigProto()
-  config.gpu_options.allocator_type = 'BFC'
-  with tf.Session(config=config) as sess:
+  graph = tf.Graph()
+
+  with tf.Session(graph=graph) as sess:
+    graph_info = sess.graph
     model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                     FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim,
                     FLAGS.model, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
-
+    writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)
     tf.initialize_all_variables().run()
 
     if FLAGS.sample:
@@ -80,7 +82,8 @@ def main(_):
       # assign learning rate to model
       sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate))
       learning_rate = FLAGS.learning_rate
-      last_cost = 100
+      last_cost = 999999
+      step = 0
       costs = []
 
       for e in xrange(FLAGS.num_epochs):
@@ -91,14 +94,19 @@ def main(_):
           start = time.time()
           x, y = data_loader.next_batch()
           feed = {model.input_data: x, model.targets: y, model.initial_state: state}
-          train_cost, state, _ = sess.run([model.cost, model.final_state, model.train_op], feed)
+          summary, perplexity, train_cost, state, _ = sess.run(
+            [model.merged, model.perplexity,
+             model.cost, model.final_state,
+             model.train_op], feed)
           end = time.time()
           costs = np.append(costs, train_cost)[-FLAGS.save_every:]
+          writer.add_summary(summary, step)
+          step += 1
 
-          print "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}, lr = {:.5f}" \
+          print "{}/{} (epoch {}), train_loss = {:.2f}, perplexity = {:.2f}, time/batch = {:.2f}, lr = {:.4f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, end - start, learning_rate)
+                      e, train_cost, perplexity, end - start, learning_rate)
 
           if (e * data_loader.num_batches + b) % FLAGS.save_every == 0:
             # update learning rate
