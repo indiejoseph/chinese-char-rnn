@@ -23,7 +23,7 @@ flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay of SGD [0.95]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
-flags.DEFINE_float("l2", 0.0004, "L2 Normalization")
+flags.DEFINE_float("l2_reg_lambda", 1e-4, "L2 Normalization")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("summary_every", 100, "Write summary every")
 flags.DEFINE_string("model", "gru", "rnn, lstm or gru")
@@ -57,7 +57,7 @@ def main(_):
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
     model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                    FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim, FLAGS.l2,
+                    FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim, FLAGS.l2_reg_lambda,
                     FLAGS.model, FLAGS.use_peepholes, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
     writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)
