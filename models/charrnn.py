@@ -2,7 +2,6 @@ import sys
 from base import Model
 import tensorflow as tf
 import numpy as np
-import mi_rnn_cell
 from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
@@ -35,9 +34,9 @@ class CharRNN(Model):
     if model == "rnn":
       cell_fn = rnn_cell.BasicRNNCell
     elif model == "gru":
-      cell_fn = mi_rnn_cell.MIGRUCell
+      cell_fn = rnn_cell.GRUCell
     elif model == "lstm":
-      cell_fn = mi_rnn_cell.MILSTMCell
+      cell_fn = rnn_cell.LSTMCell
     else:
       raise Exception("model type not supported: {}".format(model))
 
@@ -72,31 +71,31 @@ class CharRNN(Model):
                                   initializer=tf.contrib.layers.xavier_initializer(uniform=True))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      outputs, self.final_state = seq2seq.rnn_decoder(inputs, # [seq_length, batch_size, edim]
+      outputs, self.final_state = seq2seq.rnn_decoder(inputs,
                                                       self.initial_state, cell,
                                                       loop_function=loop if infer else None,
                                                       scope='rnnlm')
-      output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size]) # [seq_length * batch_size, edim]
-      self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b)
+      finial_output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
+      self.logits = tf.nn.xw_plus_b(finial_output, softmax_w, softmax_b)
       self.probs = tf.nn.softmax(self.logits)
 
     self.learning_rate = tf.Variable(0.0, trainable=False)
+
     self.loss = seq2seq.sequence_loss_by_example([self.logits],
-                                              [tf.reshape(self.targets, [-1])],
-                                              [tf.ones([batch_size * seq_length])],
-                                              vocab_size)
-    self.cost = (tf.reduce_sum(self.loss) / batch_size / seq_length)
+                [tf.reshape(self.targets, [-1])],
+                [tf.ones([batch_size * seq_length])],
+                vocab_size)
+
+    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars))
-    self.perplexity = tf.exp(self.cost / seq_length)
 
     tf.scalar_summary("learning rate", self.learning_rate)
     tf.scalar_summary("cost", self.cost)
     tf.histogram_summary("loss", self.loss)
-    tf.scalar_summary("perplexity", self.perplexity)
     self.merged = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):

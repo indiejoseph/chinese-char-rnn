@@ -104,8 +104,7 @@ def main(_):
           for i, state in enumerate(state):
             feed[model.initial_state[i]] = state
 
-          fetchs = [model.merged, model.perplexity,
-                    model.cost, model.train_op]
+          fetchs = [model.merged, model.cost, model.train_op]
 
           # fetch final_state
           for state in model.final_state:
@@ -113,9 +112,8 @@ def main(_):
 
           res = sess.run(fetchs, feed)
           summary = res[0]
-          perplexity = res[1]
-          train_cost = res[2]
-          state = res[4:]
+          train_cost = res[1]
+          state = res[3:]
           end = time.time()
 
           if step % FLAGS.summary_every == 0:
@@ -123,10 +121,10 @@ def main(_):
 
           step += 1
 
-          print "{}/{} (epoch {}), train_loss = {:.2f}, perplexity = {:.2f}, time/batch = {:.2f}" \
+          print "{}/{} (epoch {}), train_loss = {:.2f}, time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, perplexity, end - start)
+                      e, train_cost, end - start)
 
           if (e * data_loader.num_batches + b) % FLAGS.save_every == 0:
             # save to checkpoint
