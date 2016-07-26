@@ -85,18 +85,37 @@ def main(_):
       sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate))
       step = 0
 
+      # run it!
       for e in xrange(FLAGS.num_epochs):
         data_loader.reset_batch_pointer()
 
+        # assign initial state to rnn
+        state = []
+        for i, s in enumerate(model.initial_state):
+          state.append(s.eval())
+
+        # iterate by batch
         for b in xrange(data_loader.num_batches):
           start = time.time()
           x, y = data_loader.next_batch()
           feed = {model.input_data: x, model.targets: y}
 
-          summary, perplexity, train_cost, _ = sess.run(
-            [model.merged, model.perplexity,
-             model.cost,
-             model.train_op], feed)
+          # assign final state to rnn
+          for i, state in enumerate(state):
+            feed[model.initial_state[i]] = state
+
+          fetchs = [model.merged, model.perplexity,
+                    model.cost, model.train_op]
+
+          # fetch final_state
+          for state in model.final_state:
+            fetchs.append(state)
+
+          res = sess.run(fetchs, feed)
+          summary = res[0]
+          perplexity = res[1]
+          train_cost = res[2]
+          state = res[4:]
           end = time.time()
 
           if step % FLAGS.summary_every == 0:
