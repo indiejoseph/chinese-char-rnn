@@ -18,7 +18,6 @@ class CharRNN(Model):
       seq_length = 1
 
     self.sess = sess
-
     self.batch_size = batch_size
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
@@ -80,8 +79,8 @@ class CharRNN(Model):
       self.logits = tf.nn.xw_plus_b(finial_output, softmax_w, softmax_b)
       self.probs = tf.nn.softmax(self.logits)
 
+    self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
-
     self.loss = seq2seq.sequence_loss_by_example([self.logits],
                 [tf.reshape(self.targets, [-1])],
                 [tf.ones([batch_size * seq_length])],
@@ -92,7 +91,7 @@ class CharRNN(Model):
     tvars = tf.trainable_variables()
     optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
-    self.train_op = optimizer.apply_gradients(zip(grads, tvars))
+    self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
     tf.scalar_summary("learning rate", self.learning_rate)
     tf.scalar_summary("cost", self.cost)
