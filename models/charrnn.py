@@ -2,6 +2,7 @@ import sys
 from base import Model
 import tensorflow as tf
 import numpy as np
+import mi_rnn_cell
 from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
@@ -34,9 +35,9 @@ class CharRNN(Model):
     if model == "rnn":
       cell_fn = rnn_cell.BasicRNNCell
     elif model == "gru":
-      cell_fn = rnn_cell.GRUCell
+      cell_fn = mi_rnn_cell.MIGRUCell
     elif model == "lstm":
-      cell_fn = rnn_cell.LSTMCell
+      cell_fn = mi_rnn_cell.MILSTMCell
     else:
       raise Exception("model type not supported: {}".format(model))
 
