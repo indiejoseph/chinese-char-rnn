@@ -1484,7 +1484,7 @@ class TextLoader():
     counter = collections.Counter(data)
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
     self.chars, counts = zip(*count_pairs)
-    threshold = 5
+    threshold = 10
     self.chars = [c for i, c in enumerate(self.chars) if counts[i] > threshold]
     self.vocab_size = len(self.chars)
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
@@ -1507,7 +1507,7 @@ class TextLoader():
     self.num_batches = int(self.tensor.size / (self.batch_size *
                            self.seq_length))
 
-    # When the data (tesor) is too small, let's give them a better error message
+    # When the data (tensor) is too small, let's give them a better error message
     if self.num_batches==0:
       assert False, "Not enough data. Make seq_length and batch_size small."
 
@@ -1518,7 +1518,6 @@ class TextLoader():
     ydata[-1] = xdata[0]
     self.x_batches = np.split(xdata.reshape(self.batch_size, -1), self.num_batches, 1)
     self.y_batches = np.split(ydata.reshape(self.batch_size, -1), self.num_batches, 1)
-
 
   def next_batch(self):
     x, y = self.x_batches[self.pointer], self.y_batches[self.pointer]

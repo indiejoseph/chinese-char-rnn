@@ -121,6 +121,10 @@ def main(_):
 
           step += 1
 
+          if train_cost >= 10:
+            print train_cost, x, y
+            sys.exit()
+
           print "{}/{} (epoch {}), train_loss = {:.2f}, time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
