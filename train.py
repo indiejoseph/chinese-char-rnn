@@ -20,7 +20,7 @@ flags.DEFINE_integer("rnn_size", 1024, "The size of state for RNN")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 10, "Learning rate [10]")
+flags.DEFINE_float("learning_rate", .1, "Learning rate [.1]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("summary_every", 100, "Write summary every")
@@ -116,10 +116,6 @@ def main(_):
 
           if current_step % FLAGS.summary_every == 0:
             writer.add_summary(summary, current_step)
-
-          if train_cost >= 10:
-            print train_cost, x, y
-            sys.exit()
 
           print "{}/{} (epoch {}), train_loss = {:.2f}, time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
