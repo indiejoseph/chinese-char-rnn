@@ -58,8 +58,20 @@ class CharRNN(Model):
         self.embedding = tf.get_variable("embedding", [vocab_size, edim],
                                          initializer=tf.contrib.layers.xavier_initializer(uniform=True))
 
-        inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
-        inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+        inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+        inputs = tf.split(1, seq_length, inputs)
+
+        if edim == rnn_size:
+          inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+        else:
+          softmax_win = tf.get_variable("softmax_win", [edim, rnn_size])
+          softmax_bin = tf.get_variable("softmax_bin", [rnn_size])
+          inputs_ = []
+          for input_ in inputs:
+            input_ = tf.squeeze(input_, [1])
+            input_ = tf.matmul(input_, softmax_win) + softmax_bin
+            inputs_.append(input_)
+          inputs = inputs_
 
     def loop(prev, _):
       prev = tf.nn.xw_plus_b(prev, softmax_w, softmax_b)
@@ -67,7 +79,7 @@ class CharRNN(Model):
       return tf.nn.embedding_lookup(self.embedding, prev_symbol)
 
     with tf.variable_scope('output'):
-      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size],
+      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
                                   initializer=tf.contrib.layers.xavier_initializer(uniform=True))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
@@ -75,18 +87,22 @@ class CharRNN(Model):
                                                       self.initial_state, cell,
                                                       loop_function=loop if infer else None,
                                                       scope='rnnlm')
-      finial_output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
-      self.logits = tf.nn.xw_plus_b(finial_output, softmax_w, softmax_b)
-      self.probs = tf.nn.softmax(self.logits)
+      outputs = tf.concat(1, outputs)
+      outputs = tf.reshape(outputs, [-1, rnn_size])
+      # self.logits = tf.nn.xw_plus_b(outputs, softmax_w, softmax_b)
+      # self.probs = tf.nn.softmax(self.logits)
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
-    self.loss = seq2seq.sequence_loss_by_example([self.logits],
-                [tf.reshape(self.targets, [-1])],
-                [tf.ones([batch_size * seq_length])],
-                vocab_size)
 
-    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
+    train_labels = tf.reshape(self.targets, [-1, 1])
+    self.loss = tf.nn.nce_loss(softmax_w, softmax_b, outputs, train_labels, 100, vocab_size)
+    # self.loss = seq2seq.sequence_loss_by_example([self.logits],
+    #             [tf.reshape(self.targets, [-1])],
+    #             [tf.ones([batch_size * seq_length])],
+    #             vocab_size)
+
+    self.cost = tf.reduce_sum(self.loss) / batch_size
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
