@@ -110,22 +110,17 @@ class CharRNN(Model):
     self.merged = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):
-    states = []
     initial_state = self.cell.zero_state(1, tf.float32)
-    for state in initial_state:
-      states.append(state.eval())
+    states = [state.eval() for state in initial_state]
     prime = prime.decode('utf-8')
 
     for char in prime[:-1]:
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
       feed = {self.input_data: x}
-      fetchs = []
       for i, state in enumerate(self.initial_state):
         feed[self.initial_state[i]] = states[i]
-      for state in self.final_state:
-        fetchs.append(state)
-      states = sess.run(fetchs, feed)
+      states = sess.run(list(self.final_state), feed)
 
     def weighted_pick(weights):
       t = np.cumsum(weights)
@@ -141,9 +136,7 @@ class CharRNN(Model):
       feed = {self.input_data: x}
       for i, state in enumerate(states):
         feed[self.initial_state[i]] = state
-      fetchs = [self.probs]
-      for state in self.final_state:
-        fetchs.append(state)
+      fetchs = [self.probs] + list(self.final_state)
       res = sess.run(fetchs, feed)
       probs = res[0]
       states = res[1:]

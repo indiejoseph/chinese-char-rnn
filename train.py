@@ -102,11 +102,7 @@ def main(_):
           for i, state in enumerate(state):
             feed[model.initial_state[i]] = state
 
-          fetchs = [model.merged, model.cost, model.train_op]
-
-          # fetch final_state
-          for state in model.final_state:
-            fetchs.append(state)
+          fetchs = [model.merged, model.cost, model.train_op] + list(model.final_state)
 
           res = sess.run(fetchs, feed)
           current_step = tf.train.global_step(sess, model.global_step)
