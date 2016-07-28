@@ -7,7 +7,7 @@ from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               rnn_size=512, layer_depth=2, edim=128, nce_samples
+               rnn_size=512, layer_depth=2, edim=128, nce_samples=10,
                model="gru", use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
