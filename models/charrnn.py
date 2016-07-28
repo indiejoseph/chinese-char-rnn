@@ -3,7 +3,7 @@ from base import Model
 import tensorflow as tf
 import numpy as np
 import mi_rnn_cell
-from tensorflow.python.ops import rnn_cell, seq2seq
+from tensorflow.python.ops import seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
@@ -32,7 +32,7 @@ class CharRNN(Model):
     self.keep_prob = keep_prob
 
     if model == "rnn":
-      cell_fn = rnn_cell.BasicRNNCell
+      cell_fn = tf.nn.rnn_cell.BasicRNNCell
     elif model == "gru":
       cell_fn = mi_rnn_cell.MIGRUCell
     elif model == "lstm":
@@ -46,9 +46,9 @@ class CharRNN(Model):
       cell = cell_fn(rnn_size)
 
     if not infer and self.keep_prob < 1:
-      cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=self.keep_prob)
+      cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=self.keep_prob)
 
-    self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
+    self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length])
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length])
     self.initial_state = cell.zero_state(batch_size, tf.float32)
@@ -111,7 +111,7 @@ class CharRNN(Model):
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):
     initial_state = self.cell.zero_state(1, tf.float32)
-    states = [state.eval() for state in initial_state]
+    states = sess.run(model.initial_state)
     prime = prime.decode('utf-8')
 
     for char in prime[:-1]:

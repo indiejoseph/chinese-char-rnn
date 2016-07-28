@@ -20,7 +20,7 @@ flags.DEFINE_integer("rnn_size", 1024, "The size of state for RNN")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1.0, "Learning rate [1.0]")
+flags.DEFINE_float("learning_rate", 0.1, "Learning rate [0.1]")
 flags.DEFINE_integer("nce_samples", 10, "NCE sample size [10]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
@@ -88,9 +88,7 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         # assign initial state to rnn
-        state = []
-        for i, s in enumerate(model.initial_state):
-          state.append(s.eval())
+        states = sess.run(model.initial_state)
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
@@ -99,7 +97,7 @@ def main(_):
           feed = {model.input_data: x, model.targets: y}
 
           # assign final state to rnn
-          for i, state in enumerate(state):
+          for i, state in enumerate(states):
             feed[model.initial_state[i]] = state
 
           fetchs = [model.merged, model.cost, model.train_op] + list(model.final_state)
@@ -108,7 +106,7 @@ def main(_):
           current_step = tf.train.global_step(sess, model.global_step)
           summary = res[0]
           train_cost = res[1]
-          state = res[3:]
+          states = res[3:]
           end = time.time()
 
           if current_step % FLAGS.summary_every == 0:
