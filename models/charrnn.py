@@ -89,19 +89,14 @@ class CharRNN(Model):
                                                       scope='rnnlm')
       outputs = tf.concat(1, outputs)
       outputs = tf.reshape(outputs, [-1, rnn_size])
-      # self.logits = tf.nn.xw_plus_b(outputs, softmax_w, softmax_b)
-      # self.probs = tf.nn.softmax(self.logits)
+      self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
+      self.probs = tf.nn.softmax(self.logits)
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
 
     train_labels = tf.reshape(self.targets, [-1, 1])
     self.loss = tf.nn.nce_loss(softmax_w, softmax_b, outputs, train_labels, nce_samples, vocab_size)
-    # self.loss = seq2seq.sequence_loss_by_example([self.logits],
-    #             [tf.reshape(self.targets, [-1])],
-    #             [tf.ones([batch_size * seq_length])],
-    #             vocab_size)
-
     self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
@@ -115,19 +110,22 @@ class CharRNN(Model):
     self.merged = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):
-    state = []
+    states = []
     initial_state = self.cell.zero_state(1, tf.float32)
     for state in initial_state:
-      state.append(state.eval())
+      states.append(state.eval())
     prime = prime.decode('utf-8')
 
     for char in prime[:-1]:
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
       feed = {self.input_data: x}
+      fetchs = []
       for i, state in enumerate(self.initial_state):
-        feed[self.initial_state[i]] = state[i]
-      state = sess.run([self.final_state], feed)
+        feed[self.initial_state[i]] = states[i]
+      for state in self.final_state:
+        fetchs.append(state)
+      states = sess.run(fetchs, feed)
 
     def weighted_pick(weights):
       t = np.cumsum(weights)
@@ -140,8 +138,15 @@ class CharRNN(Model):
     for _ in xrange(num):
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
-      feed = {self.input_data: x, self.initial_state:state}
-      [probs, state] = sess.run([self.probs, self.final_state], feed)
+      feed = {self.input_data: x}
+      for i, state in enumerate(states):
+        feed[self.initial_state[i]] = state
+      fetchs = [self.probs]
+      for state in self.final_state:
+        fetchs.append(state)
+      res = sess.run(fetchs, feed)
+      probs = res[0]
+      states = res[1:]
       p = probs[0]
       # sample = int(np.random.choice(len(p), p=p))
       sample = weighted_pick(p)
