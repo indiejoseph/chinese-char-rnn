@@ -102,7 +102,7 @@ class CharRNN(Model):
     #             [tf.ones([batch_size * seq_length])],
     #             vocab_size)
 
-    self.cost = tf.reduce_sum(self.loss) / batch_size
+    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
