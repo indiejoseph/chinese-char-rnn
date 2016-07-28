@@ -21,6 +21,7 @@ flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 1.0, "Learning rate [1.0]")
+flags.DEFINE_integer("nce_samples", 10, "NCE sample size [10]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("summary_every", 100, "Write summary every")
@@ -55,7 +56,7 @@ def main(_):
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
     model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                    FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim,
+                    FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim, FLAGS.nce_samples,
                     FLAGS.model, FLAGS.use_peepholes, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
     writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)

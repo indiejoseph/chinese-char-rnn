@@ -7,7 +7,7 @@ from tensorflow.python.ops import rnn_cell, seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               rnn_size=512, layer_depth=2, edim=128,
+               rnn_size=512, layer_depth=2, edim=128, nce_samples
                model="gru", use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -96,7 +96,7 @@ class CharRNN(Model):
     self.learning_rate = tf.Variable(0.0, trainable=False)
 
     train_labels = tf.reshape(self.targets, [-1, 1])
-    self.loss = tf.nn.nce_loss(softmax_w, softmax_b, outputs, train_labels, 100, vocab_size)
+    self.loss = tf.nn.nce_loss(softmax_w, softmax_b, outputs, train_labels, nce_samples, vocab_size)
     # self.loss = seq2seq.sequence_loss_by_example([self.logits],
     #             [tf.reshape(self.targets, [-1])],
     #             [tf.ones([batch_size * seq_length])],
