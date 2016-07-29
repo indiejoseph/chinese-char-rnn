@@ -110,8 +110,8 @@ class CharRNN(Model):
     self.merged = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):
-    initial_state = self.cell.zero_state(1, tf.float32)
-    states = sess.run(model.initial_state)
+    self.initial_state = self.cell.zero_state(1, tf.float32)
+    states = sess.run(self.initial_state)
     prime = prime.decode('utf-8')
 
     for char in prime[:-1]:
