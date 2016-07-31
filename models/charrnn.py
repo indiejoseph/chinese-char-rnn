@@ -131,7 +131,7 @@ class CharRNN(Model):
         fetchs.extend([c, h])
       res = sess.run(fetchs, feed)
       probs = res[0]
-      states = res[1:]
+      state_list = res[1:]
       p = probs[0]
       # sample = int(np.random.choice(len(p), p=p))
       sample = weighted_pick(p)
