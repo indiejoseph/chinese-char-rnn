@@ -8,7 +8,7 @@ from tensorflow.python.ops import seq2seq
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
                rnn_size=512, layer_depth=2, edim=128, nce_samples=10,
-               model="gru", use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
+               use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
     Model.__init__(self)
@@ -24,26 +24,19 @@ class CharRNN(Model):
     self.dataset_name = dataset_name
 
     # RNN
-    self.model = model
     self.rnn_size = rnn_size
     self.edim = edim
     self.layer_depth = layer_depth
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
 
-    if model == "rnn":
-      cell_fn = tf.nn.rnn_cell.BasicRNNCell
-    elif model == "gru":
-      cell_fn = mi_rnn_cell.MIGRUCell
-    elif model == "lstm":
-      cell_fn = mi_rnn_cell.MILSTMCell
-    else:
-      raise Exception("model type not supported: {}".format(model))
+    # LSTM
+    cell_fn = mi_rnn_cell.MILSTMCell
 
-    if model == "lstm" and use_peepholes:
+    if use_peepholes:
       cell = cell_fn(rnn_size, use_peepholes=True, state_is_tuple=True)
     else:
-      cell = cell_fn(rnn_size)
+      cell = cell_fn(rnn_size, state_is_tuple=True)
 
     if not infer and self.keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=self.keep_prob)
@@ -74,7 +67,7 @@ class CharRNN(Model):
           inputs = inputs_
 
     def loop(prev, _):
-      prev = tf.nn.xw_plus_b(prev, softmax_w, softmax_b)
+      prev = tf.matmul(prev, softmax_w, transpose_b=True) + softmax_b
       prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
       return tf.nn.embedding_lookup(self.embedding, prev_symbol)
 
@@ -96,7 +89,12 @@ class CharRNN(Model):
     self.learning_rate = tf.Variable(0.0, trainable=False)
 
     train_labels = tf.reshape(self.targets, [-1, 1])
-    self.loss = tf.nn.nce_loss(softmax_w, softmax_b, outputs, train_labels, nce_samples, vocab_size)
+    self.loss = tf.nn.nce_loss(softmax_w,
+                               softmax_b,
+                               outputs,
+                               tf.to_int64(train_labels),
+                               nce_samples,
+                               vocab_size)
     self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
@@ -111,16 +109,25 @@ class CharRNN(Model):
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):
     self.initial_state = self.cell.zero_state(1, tf.float32)
-    states = sess.run(self.initial_state)
+
+    # assign final state to rnn
+    state_list = []
+    for c, h in self.initial_state:
+      state_list.extend([c.eval(), h.eval()])
+
     prime = prime.decode('utf-8')
 
     for char in prime[:-1]:
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
       feed = {self.input_data: x}
-      for i, state in enumerate(self.initial_state):
-        feed[self.initial_state[i]] = states[i]
-      states = sess.run(list(self.final_state), feed)
+      fetchs = []
+      for i in range(len(self.initial_state)):
+        c, h = self.initial_state[i]
+        feed[c], feed[h] = state_list[i*2:(i+1)*2]
+      for c, h in self.final_state:
+        fetchs.extend([c, h])
+      states = sess.run(fetchs, feed)
 
     def weighted_pick(weights):
       t = np.cumsum(weights)
@@ -134,9 +141,12 @@ class CharRNN(Model):
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, 0)
       feed = {self.input_data: x}
-      for i, state in enumerate(states):
-        feed[self.initial_state[i]] = state
-      fetchs = [self.probs] + list(self.final_state)
+      fetchs = [self.probs]
+      for i in range(len(self.initial_state)):
+        c, h = self.initial_state[i]
+        feed[c], feed[h] = state_list[i*2:(i+1)*2]
+      for c, h in self.final_state:
+        fetchs.extend([c, h])
       res = sess.run(fetchs, feed)
       probs = res[0]
       states = res[1:]

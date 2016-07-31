@@ -21,11 +21,10 @@ flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 0.1, "Learning rate [0.1]")
-flags.DEFINE_integer("nce_samples", 10, "NCE sample size [10]")
+flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("summary_every", 100, "Write summary every")
-flags.DEFINE_string("model", "gru", "rnn, lstm or gru")
 flags.DEFINE_boolean("use_peepholes", True, "use peepholes")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
@@ -40,7 +39,7 @@ def main(_):
   pp.pprint(FLAGS.__flags)
 
   if not os.path.exists(FLAGS.checkpoint_dir):
-    print(" [*] Creating checkpoint directory...")
+    print " [*] Creating checkpoint directory..."
     os.makedirs(FLAGS.checkpoint_dir)
 
   if FLAGS.sample:
@@ -57,7 +56,7 @@ def main(_):
     graph_info = sess.graph
     model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                     FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim, FLAGS.nce_samples,
-                    FLAGS.model, FLAGS.use_peepholes, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
+                    FLAGS.use_peepholes, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
     writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)
     tf.initialize_all_variables().run()
@@ -65,16 +64,16 @@ def main(_):
     if FLAGS.sample:
       # load checkpoints
       if model.load(model.checkpoint_dir, model.dataset_name):
-        print(" [*] SUCCESS to load model for %s." % model.dataset_name)
+        print " [*] SUCCESS to load model for %s." % model.dataset_name
       else:
-        print(" [!] Failed to load model for %s." % model.dataset_name)
+        print " [!] Failed to load model for %s." % model.dataset_name
         sys.exit(1)
 
       sample = normalizeUnicodes(FLAGS.sample)
       print model.sample(sess, data_loader.chars, data_loader.vocab, 200, sample)
 
     elif FLAGS.export:
-      print("Eval...")
+      print "Eval..."
       final_embeddings = model.embedding.eval(sess)
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
       print "Embedding shape: {}".format(final_embeddings.shape)
@@ -87,8 +86,10 @@ def main(_):
       for e in xrange(FLAGS.num_epochs):
         data_loader.reset_batch_pointer()
 
-        # assign initial state to rnn
-        states = sess.run(model.initial_state)
+        # assign final state to rnn
+        state_list = []
+        for c, h in model.initial_state:
+          state_list.extend([c.eval(), h.eval()])
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
@@ -96,17 +97,19 @@ def main(_):
           x, y = data_loader.next_batch()
           feed = {model.input_data: x, model.targets: y}
 
-          # assign final state to rnn
-          for i, state in enumerate(states):
-            feed[model.initial_state[i]] = state
+          for i in range(len(model.initial_state)):
+            c, h = model.initial_state[i]
+            feed[c], feed[h] = state_list[i*2:(i+1)*2]
 
-          fetchs = [model.merged, model.cost, model.train_op] + list(model.final_state)
+          fetchs = [model.merged, model.cost, model.train_op]
+          for c, h in model.final_state:
+            fetchs.extend([c, h])
 
           res = sess.run(fetchs, feed)
-          current_step = tf.train.global_step(sess, model.global_step)
           summary = res[0]
           train_cost = res[1]
-          states = res[3:]
+          state_list = res[3:]
+          current_step = tf.train.global_step(sess, model.global_step)
           end = time.time()
 
           if current_step % FLAGS.summary_every == 0:
