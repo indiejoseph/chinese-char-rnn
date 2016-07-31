@@ -7,7 +7,7 @@ from tensorflow.python.ops import seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               rnn_size=512, layer_depth=2, edim=128, nce_samples=10,
+               layer_depth=2, edim=128, nce_samples=10,
                use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -24,7 +24,6 @@ class CharRNN(Model):
     self.dataset_name = dataset_name
 
     # RNN
-    self.rnn_size = rnn_size
     self.edim = edim
     self.layer_depth = layer_depth
     self.grad_clip = grad_clip
@@ -34,12 +33,14 @@ class CharRNN(Model):
     cell_fn = mi_rnn_cell.MILSTMCell
 
     if use_peepholes:
-      cell = cell_fn(rnn_size, use_peepholes=True, state_is_tuple=True)
+      cell = cell_fn(edim, use_peepholes=True, state_is_tuple=True)
     else:
-      cell = cell_fn(rnn_size, state_is_tuple=True)
+      cell = cell_fn(edim, state_is_tuple=True)
 
     if not infer and self.keep_prob < 1:
-      cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=self.keep_prob)
+      cell = tf.nn.rnn_cell.DropoutWrapper(cell,
+                                           input_keep_prob=self.keep_prob,
+                                           output_keep_prob=self.keep_prob)
 
     self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length])
@@ -52,36 +53,17 @@ class CharRNN(Model):
                                          initializer=tf.contrib.layers.xavier_initializer(uniform=True))
 
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
-        inputs = tf.split(1, seq_length, inputs)
 
-        if edim == rnn_size:
-          inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
-        else:
-          softmax_win = tf.get_variable("softmax_win", [edim, rnn_size])
-          softmax_bin = tf.get_variable("softmax_bin", [rnn_size])
-          inputs_ = []
-          for input_ in inputs:
-            input_ = tf.squeeze(input_, [1])
-            input_ = tf.matmul(input_, softmax_win) + softmax_bin
-            inputs_.append(input_)
-          inputs = inputs_
-
-    def loop(prev, _):
-      prev = tf.matmul(prev, softmax_w, transpose_b=True) + softmax_b
-      prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
-      return tf.nn.embedding_lookup(self.embedding, prev_symbol)
-
-    with tf.variable_scope('output'):
-      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
+    with tf.variable_scope('decode'):
+      softmax_w = tf.get_variable("softmax_w", [vocab_size, edim],
                                   initializer=tf.contrib.layers.xavier_initializer(uniform=True))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      outputs, self.final_state = seq2seq.rnn_decoder(inputs,
-                                                      self.initial_state, cell,
-                                                      loop_function=loop if infer else None,
-                                                      scope='rnnlm')
-      outputs = tf.concat(1, outputs)
-      outputs = tf.reshape(outputs, [-1, rnn_size])
+      # [batch_size, n_steps, rnn_hidden_size]
+      outputs, self.final_state = tf.nn.dynamic_rnn(self.cell, inputs,
+          time_major=False, dtype=tf.float32)
+
+      outputs = tf.reshape(outputs, [-1, edim])
       self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
@@ -127,7 +109,7 @@ class CharRNN(Model):
         feed[c], feed[h] = state_list[i*2:(i+1)*2]
       for c, h in self.final_state:
         fetchs.extend([c, h])
-      states = sess.run(fetchs, feed)
+      state_list = sess.run(fetchs, feed)
 
     def weighted_pick(weights):
       t = np.cumsum(weights)

@@ -16,7 +16,6 @@ pp = pprint.PrettyPrinter()
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
 flags.DEFINE_integer("edim", 256, "The dimension of char embedding matrix [256]")
-flags.DEFINE_integer("rnn_size", 1024, "The size of state for RNN")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
@@ -55,7 +54,7 @@ def main(_):
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
     model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                    FLAGS.rnn_size, FLAGS.layer_depth, FLAGS.edim, FLAGS.nce_samples,
+                    FLAGS.layer_depth, FLAGS.edim, FLAGS.nce_samples,
                     FLAGS.use_peepholes, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
     writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)
