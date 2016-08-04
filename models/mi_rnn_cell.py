@@ -25,6 +25,7 @@
 @@LSTMStateTuple
 
 """
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
@@ -42,8 +43,6 @@ from tensorflow.python.ops.math_ops import sigmoid
 from tensorflow.python.ops.math_ops import tanh
 
 from tensorflow.python.platform import tf_logging as logging
-# from tensorflow.python.util import nest
-from util import nest
 from tensorflow.python.ops import rnn_cell
 
 

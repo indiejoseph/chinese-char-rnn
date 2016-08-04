@@ -3,11 +3,12 @@ from base import Model
 import tensorflow as tf
 import numpy as np
 import mi_rnn_cell
+import tfu.sandbox.layer_normalization as ln
 from tensorflow.python.ops import seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               layer_depth=2, edim=128, nce_samples=10,
+               layer_depth=2, rnn_size=128, nce_samples=10, momentum=0.9,
                use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -22,9 +23,10 @@ class CharRNN(Model):
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
+    self.momentum = momentum
 
     # RNN
-    self.edim = edim
+    self.rnn_size = rnn_size
     self.layer_depth = layer_depth
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
@@ -33,9 +35,9 @@ class CharRNN(Model):
     cell_fn = mi_rnn_cell.MILSTMCell
 
     if use_peepholes:
-      cell = cell_fn(edim, use_peepholes=True, state_is_tuple=True)
+      cell = cell_fn(rnn_size, use_peepholes=True, state_is_tuple=True)
     else:
-      cell = cell_fn(edim, state_is_tuple=True)
+      cell = cell_fn(rnn_size, state_is_tuple=True)
 
     if not infer and self.keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell,
@@ -49,21 +51,24 @@ class CharRNN(Model):
 
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding", [vocab_size, edim],
-                                         initializer=tf.contrib.layers.xavier_initializer(uniform=True))
+        self.embedding = tf.get_variable(name="embedding",
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
 
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+        # Layer normalization - https://arxiv.org/pdf/1607.06450.pdf
+        input_norm = ln.layer_normalization("ln_input", inputs)
 
     with tf.variable_scope('decode'):
-      softmax_w = tf.get_variable("softmax_w", [vocab_size, edim],
+      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
                                   initializer=tf.contrib.layers.xavier_initializer(uniform=True))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       # [batch_size, n_steps, rnn_hidden_size]
-      outputs, self.final_state = tf.nn.dynamic_rnn(self.cell, inputs,
-          time_major=False, dtype=tf.float32)
-
-      outputs = tf.reshape(outputs, [-1, edim])
+      outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
+                                                    input_norm,
+                                                    time_major=False,
+                                                    dtype=tf.float32)
+      outputs = tf.reshape(outputs, [-1, rnn_size])
       self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
@@ -80,7 +85,7 @@ class CharRNN(Model):
     self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
-    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+    optimizer = tf.train.MomentumOptimizer(self.learning_rate, self.momentum)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
