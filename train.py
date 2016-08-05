@@ -19,8 +19,8 @@ flags.DEFINE_integer("rnn_size", 256, "The dimension of char embedding matrix [2
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1., "Learning rate [1.]")
-flags.DEFINE_float("decay", 0.9, "Decay rate [0.9]")
+flags.DEFINE_float("learning_rate", .002, "Learning rate [.002]")
+flags.DEFINE_float("decay_rate", 0.9, "Decay rate [0.9]")
 flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
@@ -55,7 +55,7 @@ def main(_):
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
     model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                    FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.decay,
+                    FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
                     FLAGS.use_peepholes, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
     writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)
@@ -80,10 +80,10 @@ def main(_):
       np.save(emb_file, final_embeddings)
 
     else: # Train
-      sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate))
-
       # run it!
       for e in xrange(FLAGS.num_epochs):
+        sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
+
         data_loader.reset_batch_pointer()
 
         # assign final state to rnn

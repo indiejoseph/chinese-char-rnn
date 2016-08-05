@@ -8,7 +8,7 @@ from tensorflow.python.ops import seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               layer_depth=2, rnn_size=128, nce_samples=10, momentum=0.9,
+               layer_depth=2, rnn_size=128, nce_samples=10,
                use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -23,7 +23,6 @@ class CharRNN(Model):
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
-    self.momentum = momentum
 
     # RNN
     self.rnn_size = rnn_size
@@ -52,7 +51,7 @@ class CharRNN(Model):
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable(name="embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.08, 0.08))
 
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
         # Layer normalization - https://arxiv.org/pdf/1607.06450.pdf
@@ -85,7 +84,7 @@ class CharRNN(Model):
     self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
-    optimizer = tf.train.MomentumOptimizer(self.learning_rate, self.momentum)
+    optimizer = tf.train.AdamOptimizer(self.learning_rate)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
