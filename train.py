@@ -21,10 +21,10 @@ flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", .002, "Learning rate [.002]")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate [0.9]")
-flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
+flags.DEFINE_integer("nce_samples", 64, "NCE sample size [64]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
-flags.DEFINE_integer("summary_every", 100, "Write summary every")
+flags.DEFINE_integer("summary_every", 1000, "Write summary every")
 flags.DEFINE_boolean("use_peepholes", True, "use peepholes")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
@@ -34,6 +34,25 @@ flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the 
 flags.DEFINE_string("sample", "", "sample")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
+
+def compute_similarity (model, valid_size=16, valid_window=100):
+  # We pick a random validation set to sample nearest neighbors. Here we limit the
+  # validation samples to the characters that have a low numeric ID, which by
+  # construction are also the most frequent.
+  # valid_size: Random set of characters to evaluate similarity on.
+  # valid_size: Only pick dev samples in the head of the distribution.
+  valid_examples = np.random.choice(valid_window, valid_size, replace=False)
+  valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
+
+  # Compute the cosine similarity between minibatch examples and all embeddings.
+  norm = tf.sqrt(tf.reduce_sum(tf.square(model.embedding), 1, keep_dims=True))
+  normalized_embeddings = model.embedding / norm
+  valid_embeddings = tf.nn.embedding_lookup(normalized_embeddings,
+                                            valid_dataset)
+  similarity = tf.matmul(valid_embeddings, normalized_embeddings, transpose_b=True)
+
+  return similarity, valid_examples, valid_dataset
+
 
 def main(_):
   pp.pprint(FLAGS.__flags)
@@ -51,6 +70,8 @@ def main(_):
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
   graph = tf.Graph()
+  valid_size = 16
+  valid_window = 100
 
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
@@ -80,6 +101,9 @@ def main(_):
       np.save(emb_file, final_embeddings)
 
     else: # Train
+      current_step = 0
+      similarity, valid_examples, _ = compute_similarity(model, valid_size, valid_window)
+
       # run it!
       for e in xrange(FLAGS.num_epochs):
         sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
@@ -109,11 +133,22 @@ def main(_):
           summary = res[0]
           train_cost = res[1]
           state_list = res[3:]
-          current_step = tf.train.global_step(sess, model.global_step)
           end = time.time()
 
           if current_step % FLAGS.summary_every == 0:
             writer.add_summary(summary, current_step)
+
+            # Note that this is expensive (~20% slowdown if computed every 500 steps)
+            sim = similarity.eval()
+            for i in xrange(valid_size):
+              valid_word = data_loader.chars[valid_examples[i]]
+              top_k = 8 # number of nearest neighbors
+              nearest = (-sim[i, :]).argsort()[1:top_k+1]
+              log_str = "Nearest to %s:" % valid_word
+              for k in xrange(top_k):
+                close_word = data_loader.chars[nearest[k]]
+                log_str = "%s %s," % (log_str, close_word)
+              print(log_str)
 
           print "{}/{} (epoch {}), train_loss = {:.2f}, time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
@@ -124,6 +159,8 @@ def main(_):
             # save to checkpoint
             model.save(FLAGS.checkpoint_dir, FLAGS.dataset_name)
             print "model saved to {}".format(FLAGS.checkpoint_dir)
+
+          current_step = tf.train.global_step(sess, model.global_step)
 
 
 if __name__ == '__main__':
