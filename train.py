@@ -2,6 +2,7 @@
 
 import os
 import time
+import codecs
 import numpy as np
 import tensorflow as tf
 import cPickle
@@ -24,6 +25,7 @@ flags.DEFINE_float("decay_rate", 0.9, "Decay rate [0.9]")
 flags.DEFINE_integer("nce_samples", 64, "NCE sample size [64]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
+flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_integer("summary_every", 1000, "Write summary every")
 flags.DEFINE_boolean("use_peepholes", True, "use peepholes")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
@@ -70,7 +72,7 @@ def main(_):
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
   graph = tf.Graph()
-  valid_size = 16
+  valid_size = 25
   valid_window = 100
 
   with tf.Session(graph=graph) as sess:
@@ -138,17 +140,24 @@ def main(_):
           if current_step % FLAGS.summary_every == 0:
             writer.add_summary(summary, current_step)
 
+          if current_step % FLAGS.valid_every == 0:
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
+            log_str = ""
             sim = similarity.eval()
             for i in xrange(valid_size):
               valid_word = data_loader.chars[valid_examples[i]]
               top_k = 8 # number of nearest neighbors
               nearest = (-sim[i, :]).argsort()[1:top_k+1]
-              log_str = "Nearest to %s:" % valid_word
+              log_str = log_str + "Nearest to %s:" % valid_word
               for k in xrange(top_k):
                 close_word = data_loader.chars[nearest[k]]
                 log_str = "%s %s," % (log_str, close_word)
-              print(log_str)
+              log_str = log_str + "\n"
+            print log_str
+            # Write to log
+            text_file = codecs.open(FLAGS.log_dir + "/similarity.txt", "w", "utf-8")
+            text_file.write(log_str)
+            text_file.close()
 
           print "{}/{} (epoch {}), train_loss = {:.2f}, time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
