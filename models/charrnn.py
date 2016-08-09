@@ -39,9 +39,7 @@ class CharRNN(Model):
       cell = cell_fn(rnn_size, state_is_tuple=True, is_training=self.is_training)
 
     if not infer and self.keep_prob < 1:
-      cell = tf.nn.rnn_cell.DropoutWrapper(cell,
-                                           input_keep_prob=self.keep_prob,
-                                           output_keep_prob=self.keep_prob)
+      cell = tf.nn.rnn_cell.DropoutWrapper(cell, self.keep_prob)
 
     self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length])
