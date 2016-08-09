@@ -10,7 +10,7 @@ import pprint
 import string
 import sys
 from models.charrnn import CharRNN
-from utils import TextLoader, normalizeUnicodes
+from utils import TextLoader, normalize_unicodes
 
 pp = pprint.PrettyPrinter()
 
@@ -93,7 +93,7 @@ def main(_):
         print " [!] Failed to load model for %s." % model.dataset_name
         sys.exit(1)
 
-      sample = normalizeUnicodes(FLAGS.sample)
+      sample = normalize_unicodes(FLAGS.sample)
       print model.sample(sess, data_loader.chars, data_loader.vocab, 200, sample)
 
     elif FLAGS.export:
