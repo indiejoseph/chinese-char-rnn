@@ -4,11 +4,10 @@ import tensorflow as tf
 import numpy as np
 import mi_rnn_cell
 import tfu.sandbox.layer_normalization as ln
-from tensorflow.python.ops import seq2seq
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               layer_depth=2, rnn_size=128, nce_samples=10,
+               layer_depth=2, rnn_size=128, nce_samples=10, model='lstm',
                use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 

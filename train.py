@@ -21,8 +21,9 @@ flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", .002, "Learning rate [.002]")
+flags.DEFINE_string("model", "lstm", "RNN model [lstm]")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate [0.9]")
-flags.DEFINE_integer("nce_samples", 64, "NCE sample size [64]")
+flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
@@ -78,7 +79,7 @@ def main(_):
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
     model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                    FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
+                    FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.model,
                     FLAGS.use_peepholes, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
     writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)
@@ -146,7 +147,7 @@ def main(_):
             sim = similarity.eval()
             for i in xrange(valid_size):
               valid_word = data_loader.chars[valid_examples[i]]
-              top_k = 8 # number of nearest neighbors
+              top_k = 10 # number of nearest neighbors
               nearest = (-sim[i, :]).argsort()[1:top_k+1]
               log_str = log_str + "Nearest to %s:" % valid_word
               for k in xrange(top_k):

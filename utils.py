@@ -17,10 +17,9 @@ NEW_LINE = "\n"
 START_VOCAB = [PAD, GO, EOS, UNK, SPACE, NEW_LINE]
 
 
-def normalizeUnicodes(text):
-  text = normalizePunctuation(text)
+def normalize_unicodes(text):
+  text = normalize_punctuation(text)
   text = "".join([Q2B(c) for c in list(text)])
-
   return text
 
 
@@ -30,7 +29,7 @@ def replace_all(repls, text):
                 lambda k: repls[k.group(0)], text)
 
 
-def normalizePunctuation(text):
+def normalize_punctuation(text):
   cpun = [['	'],
           [u'﹗'],
           [u'“', u'゛', u'〃', u'′'],
@@ -96,7 +95,7 @@ class TextLoader():
   def preprocess(self, input_file, vocab_file, tensor_file):
     with codecs.open(input_file, "r", encoding=self.encoding) as f:
       data = f.read()
-      data = normalizeUnicodes(data)
+      data = normalize_unicodes(data)
     counter = collections.Counter(data)
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
     self.chars, counts = zip(*count_pairs)
