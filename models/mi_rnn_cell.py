@@ -29,7 +29,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import math
 import collections
+import tensorflow as tf
 
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
@@ -45,15 +47,55 @@ from tensorflow.python.ops.math_ops import tanh
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.ops import rnn_cell
 
+def noisy_activation(x, generic, linearized, training, alpha=1.1, c=0.5):
+  """
+  Implements the noisy activation with Half-Normal Noise for Hard-Saturation
+  functions. See http://arxiv.org/abs/1603.00391, Algorithm 1.
+  Args:
+      x: Tensor which is an input to the activation function
+      generic: The generic formulation of the activation function. (denoted
+          as h in the paper)
+      linearized: Linearization of the activation based on the first-order
+          Tailor expansion around zero. (denoted as u in the paper)
+      training: A boolean tensor telling whether we are in the training stage
+          (and the noise is sampled) or in runtime when the expactation is
+          used instead.
+      alpha: Mixing hyper-parameter. The leakage rate from the linearized
+          function to the nonlinear one.
+      c: Standard deviation of the sampled noise.
+  """
+
+  delta = generic(x) - linearized(x)
+  d = -tf.sign(x) * tf.sign(1 - alpha)
+  p = tf.Variable(1.0)
+  scale = c * (tf.sigmoid(p * delta) - 0.5)  ** 2
+  noise = tf.select(training, tf.abs(tf.random_normal([])), math.sqrt(2 / math.pi))
+  activation = alpha * generic(x) + (1 - alpha) * linearized(x) + d * scale * noise
+  return activation
+
+
+# These are equations (1), (3) and (4) in the Noisy Activation FUnctions paper
+lin_sigmoid = lambda x: 0.25 * x + 0.5
+hard_tanh = lambda x: tf.minimum(tf.maximum(x, -1.), 1.)
+hard_sigmoid = lambda x: tf.minimum(tf.maximum(lin_sigmoid(x), 0.), 1.)
+
+
+def noisy_sigmoid(x, training):
+  return noisy_activation(x, hard_sigmoid, lin_sigmoid, training)
+
+def noisy_tanh(x, training):
+  return noisy_activation(x, hard_tanh, lambda y: y, training)
+
 
 class MIGRUCell(rnn_cell.RNNCell):
   """Gated Recurrent Unit cell (cf. http://arxiv.org/abs/1406.1078)."""
 
-  def __init__(self, num_units, input_size=None, activation=tanh):
+  def __init__(self, num_units, input_size=None, activation=noisy_tanh, is_training=False):
     if input_size is not None:
       logging.warn("%s: The input_size parameter is deprecated." % self)
     self._num_units = num_units
     self._activation = activation
+    self._is_training = is_training
 
   @property
   def state_size(self):
@@ -72,7 +114,7 @@ class MIGRUCell(rnn_cell.RNNCell):
           inputs, state, 2 * self._num_units, 1.0))
         r, u = sigmoid(r), sigmoid(u)
       with vs.variable_scope("Candidate"):
-        c = self._activation(mi_linear(inputs, r * state, self._num_units))
+        c = self._activation(mi_linear(inputs, r * state, self._num_units), self._is_training)
       new_h = u * state + (1 - u) * c
     return new_h, new_h
 
@@ -115,7 +157,7 @@ class MILSTMCell(rnn_cell.RNNCell):
                use_peepholes=False, cell_clip=None,
                initializer=None,
                forget_bias=1.0, state_is_tuple=False,
-               activation=tanh):
+               activation=noisy_tanh, is_training=False):
     """Initialize the parameters for an LSTM cell.
 
     Args:
@@ -151,6 +193,7 @@ class MILSTMCell(rnn_cell.RNNCell):
     self._forget_bias = forget_bias
     self._state_is_tuple = state_is_tuple
     self._activation = activation
+    self._is_training = is_training
 
     self._state_size = (
         LSTMStateTuple(num_units, num_units)
@@ -216,10 +259,10 @@ class MILSTMCell(rnn_cell.RNNCell):
 
       if self._use_peepholes:
         c = (sigmoid(f + self._forget_bias + w_f_diag * c_prev) * c_prev +
-             sigmoid(i + w_i_diag * c_prev) * self._activation(j))
+             sigmoid(i + w_i_diag * c_prev) * self._activation(j, self._is_training))
       else:
         c = (sigmoid(f + self._forget_bias) * c_prev + sigmoid(i) *
-             self._activation(j))
+             self._activation(j, self._is_training))
 
       if self._cell_clip is not None:
         # pylint: disable=invalid-unary-operand-type
@@ -227,9 +270,9 @@ class MILSTMCell(rnn_cell.RNNCell):
         # pylint: enable=invalid-unary-operand-type
 
       if self._use_peepholes:
-        m = sigmoid(o + w_o_diag * c) * self._activation(c)
+        m = sigmoid(o + w_o_diag * c) * self._activation(c, self._is_training)
       else:
-        m = sigmoid(o) * self._activation(c)
+        m = sigmoid(o) * self._activation(c, self._is_training)
 
     new_state = (LSTMStateTuple(c, m) if self._state_is_tuple
                  else array_ops.concat(1, [c, m]))

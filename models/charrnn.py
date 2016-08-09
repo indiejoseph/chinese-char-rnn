@@ -7,7 +7,7 @@ import tfu.sandbox.layer_normalization as ln
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               layer_depth=2, rnn_size=128, nce_samples=10, model='lstm',
+               layer_depth=2, rnn_size=128, nce_samples=10,
                use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -28,14 +28,15 @@ class CharRNN(Model):
     self.layer_depth = layer_depth
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
+    self.is_training = infer == False
 
     # LSTM
     cell_fn = mi_rnn_cell.MILSTMCell
 
     if use_peepholes:
-      cell = cell_fn(rnn_size, use_peepholes=True, state_is_tuple=True)
+      cell = cell_fn(rnn_size, use_peepholes=True, state_is_tuple=True, is_training=self.is_training)
     else:
-      cell = cell_fn(rnn_size, state_is_tuple=True)
+      cell = cell_fn(rnn_size, state_is_tuple=True, is_training=self.is_training)
 
     if not infer and self.keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell,
