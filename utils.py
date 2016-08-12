@@ -141,7 +141,6 @@ class TextLoader():
     # Dropword 10%
     mask = np.random.choice([1, 0], size= x.shape, p=[.1, .9]).astype(np.bool)
     x[mask] = UNK_ID
-    print x
     self.pointer += 1
     return x, y
 
