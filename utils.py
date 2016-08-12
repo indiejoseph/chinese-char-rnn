@@ -136,10 +136,12 @@ class TextLoader():
     self.y_batches = np.split(ydata.reshape(self.batch_size, -1), self.num_batches, 1)
 
   def next_batch(self):
-    x = self.x_batches[self.pointer]
+    x = np.copy(self.x_batches[self.pointer])
     y = self.y_batches[self.pointer]
+    # Dropword 10%
     mask = np.random.choice([1, 0], size= x.shape, p=[.1, .9]).astype(np.bool)
     x[mask] = UNK_ID
+    print x
     self.pointer += 1
     return x, y
 
