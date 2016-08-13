@@ -37,13 +37,13 @@ flags.DEFINE_string("sample", "", "sample")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
 
-def compute_similarity (model, valid_size=16, valid_window=100):
+def compute_similarity (model, valid_size=16, valid_window=100, offset=0):
   # We pick a random validation set to sample nearest neighbors. Here we limit the
   # validation samples to the characters that have a low numeric ID, which by
   # construction are also the most frequent.
   # valid_size: Random set of characters to evaluate similarity on.
   # valid_size: Only pick dev samples in the head of the distribution.
-  valid_examples = np.random.choice(valid_window, valid_size, replace=False)
+  valid_examples = np.random.choice(range(offset, offset + valid_window), valid_size, replace=False)
   valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
 
   # Compute the cosine similarity between minibatch examples and all embeddings.
@@ -72,7 +72,7 @@ def main(_):
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
   graph = tf.Graph()
-  valid_size = 25
+  valid_size = 30
   valid_window = 100
 
   with tf.Session(graph=graph) as sess:
@@ -104,7 +104,7 @@ def main(_):
 
     else: # Train
       current_step = 0
-      similarity, valid_examples, _ = compute_similarity(model, valid_size, valid_window)
+      similarity, valid_examples, _ = compute_similarity(model, valid_size, valid_window, 6)
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
@@ -146,7 +146,7 @@ def main(_):
             sim = similarity.eval()
             for i in xrange(valid_size):
               valid_word = data_loader.chars[valid_examples[i]]
-              top_k = 10 # number of nearest neighbors
+              top_k = 8 # number of nearest neighbors
               nearest = (-sim[i, :]).argsort()[1:top_k+1]
               log_str = log_str + "Nearest to %s:" % valid_word
               for k in xrange(top_k):
