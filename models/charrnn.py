@@ -79,7 +79,7 @@ class CharRNN(Model):
     self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
-    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+    optimizer = tf.train.AdamOptimizer(self.learning_rate)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
