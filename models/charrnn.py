@@ -2,8 +2,9 @@ import sys
 from base import Model
 import tensorflow as tf
 import numpy as np
-import mi_rnn_cell
-import tfu.sandbox.layer_normalization as ln
+from tf_lstm import LSTMCell
+# import mi_rnn_cell
+# import tfu.sandbox.layer_normalization as ln
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
@@ -29,13 +30,10 @@ class CharRNN(Model):
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
 
-    # LSTM
-    cell_fn = mi_rnn_cell.MILSTMCell
-
     if use_peepholes:
-      cell = cell_fn(rnn_size, use_peepholes=True, state_is_tuple=True)
+      cell = LSTMCell(rnn_size, use_peepholes=True)
     else:
-      cell = cell_fn(rnn_size, state_is_tuple=True)
+      cell = LSTMCell(rnn_size)
 
     if not infer and self.keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, self.keep_prob)
@@ -52,7 +50,7 @@ class CharRNN(Model):
 
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
         # Layer normalization - https://arxiv.org/pdf/1607.06450.pdf
-        input_norm = ln.layer_normalization("ln_input", inputs)
+        # input_norm = ln.layer_normalization("ln_input", inputs)
 
     with tf.variable_scope('decode'):
       softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
@@ -61,7 +59,7 @@ class CharRNN(Model):
 
       # [batch_size, n_steps, rnn_hidden_size]
       outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
-                                                    input_norm,
+                                                    inputs,
                                                     time_major=False,
                                                     dtype=tf.float32)
       outputs = tf.reshape(outputs, [-1, rnn_size])
