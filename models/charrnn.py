@@ -44,20 +44,19 @@ class CharRNN(Model):
 
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable(name="embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.08, 0.08))
-
+        self.embedding = tf.get_variable("embedding", shape=[vocab_size, rnn_size],
+                                         initializer=tf.contrib.layers.xavier_initializer(uniform=True))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     with tf.variable_scope('decode'):
       softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
                                   initializer=tf.contrib.layers.xavier_initializer(uniform=True))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
-
-      # [batch_size, n_steps, rnn_hidden_size]
       outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
                                                     inputs,
                                                     time_major=False,
+                                                    swap_memory=True,
+                                                    initial_state=self.initial_state,
                                                     dtype=tf.float32)
       outputs = tf.reshape(outputs, [-1, rnn_size])
       self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
@@ -65,7 +64,6 @@ class CharRNN(Model):
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
-
     train_labels = tf.reshape(self.targets, [-1, 1])
     self.loss = tf.nn.nce_loss(softmax_w,
                                softmax_b,
