@@ -20,7 +20,7 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 2e-3, "Learning rate [2e-3]")
+flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay rate [0.95]")
 flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
@@ -123,7 +123,7 @@ def main(_):
           x, y = data_loader.next_batch()
           feed = {model.input_data: x, model.targets: y}
 
-          for i in range(len(model.initial_state)):
+          for i in xrange(len(model.initial_state)):
             state = model.initial_state[i]
             feed[state] = state_list[i]
 

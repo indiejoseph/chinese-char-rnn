@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import GRUCell
 import numpy as np
 
+
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
                layer_depth=2, rnn_size=128, nce_samples=10, l2_reg_lambda=.2,
@@ -76,7 +77,7 @@ class CharRNN(Model):
     self.cost = (tf.reduce_sum(self.loss)  + l2_reg_lambda * self.l2_penalized) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
-    optimizer = tf.train.AdamOptimizer(self.learning_rate)
+    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
