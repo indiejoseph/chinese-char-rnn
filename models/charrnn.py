@@ -1,15 +1,13 @@
 import sys
 from base import Model
 import tensorflow as tf
+from tensorflow.python.ops.rnn_cell import GRUCell
 import numpy as np
-from tf_lstm import LSTMCell
-# import mi_rnn_cell
-# import tfu.sandbox.layer_normalization as ln
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               layer_depth=2, rnn_size=128, nce_samples=10,
-               use_peepholes=True, seq_length=50, grad_clip=5., keep_prob=0.5,
+               layer_depth=2, rnn_size=128, nce_samples=10, l2_reg_lambda=.2,
+               seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
     Model.__init__(self)
@@ -23,6 +21,7 @@ class CharRNN(Model):
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
+    self.l2_reg_lambda = l2_reg_lambda
 
     # RNN
     self.rnn_size = rnn_size
@@ -30,10 +29,7 @@ class CharRNN(Model):
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
 
-    if use_peepholes:
-      cell = LSTMCell(rnn_size, use_peepholes=True)
-    else:
-      cell = LSTMCell(rnn_size)
+    cell = GRUCell(rnn_size)
 
     if not infer and self.keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, self.keep_prob)
@@ -43,14 +39,15 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length])
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
+    # Keeping track of l2 regularization loss (optional)
+    l2_penalized = tf.constant(0.0)
+
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable(name="embedding",
                                          initializer=tf.random_uniform([vocab_size, rnn_size], -0.08, 0.08))
 
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
-        # Layer normalization - https://arxiv.org/pdf/1607.06450.pdf
-        # input_norm = ln.layer_normalization("ln_input", inputs)
 
     with tf.variable_scope('decode'):
       softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
@@ -76,7 +73,8 @@ class CharRNN(Model):
                                tf.to_int64(train_labels),
                                nce_samples,
                                vocab_size)
-    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
+    l2_penalized = tf.nn.l2_loss(softmax_w) + tf.nn.l2_loss(softmax_b)
+    self.cost = (tf.reduce_sum(self.loss) / batch_size / seq_length) + (l2_reg_lambda * l2_penalized)
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
@@ -93,8 +91,8 @@ class CharRNN(Model):
 
     # assign final state to rnn
     state_list = []
-    for c, h in self.initial_state:
-      state_list.extend([c.eval(), h.eval()])
+    for state in self.initial_state:
+      state_list.extend([state.eval()])
 
     prime = prime.decode('utf-8')
 
@@ -104,10 +102,10 @@ class CharRNN(Model):
       feed = {self.input_data: x}
       fetchs = []
       for i in range(len(self.initial_state)):
-        c, h = self.initial_state[i]
-        feed[c], feed[h] = state_list[i*2:(i+1)*2]
-      for c, h in self.final_state:
-        fetchs.extend([c, h])
+        state = self.initial_state[i]
+        feed[state] = state_list[i]
+      for state in self.final_state:
+        fetchs.extend([state])
       state_list = sess.run(fetchs, feed)
 
     def weighted_pick(weights):
@@ -124,10 +122,10 @@ class CharRNN(Model):
       feed = {self.input_data: x}
       fetchs = [self.probs]
       for i in range(len(self.initial_state)):
-        c, h = self.initial_state[i]
-        feed[c], feed[h] = state_list[i*2:(i+1)*2]
-      for c, h in self.final_state:
-        fetchs.extend([c, h])
+        state = self.initial_state[i]
+        feed[state] = state_list[i]
+      for state in self.final_state:
+        fetchs.extend([state])
       res = sess.run(fetchs, feed)
       probs = res[0]
       state_list = res[1:]

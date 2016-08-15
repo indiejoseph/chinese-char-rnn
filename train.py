@@ -20,14 +20,14 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1e-3, "Learning rate [1e-3]")
-flags.DEFINE_float("decay_rate", 0.9, "Decay rate [0.9]")
+flags.DEFINE_float("learning_rate", 2e-3, "Learning rate [2e-3]")
+flags.DEFINE_float("decay_rate", 0.95, "Decay rate [0.95]")
 flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
+flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularizaion lambda (default: 0.0)")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_integer("summary_every", 1000, "Write summary every")
-flags.DEFINE_boolean("use_peepholes", True, "use peepholes")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -78,8 +78,8 @@ def main(_):
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
     model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                    FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
-                    FLAGS.use_peepholes, FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
+                    FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                    FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                     FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
     writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)
     tf.initialize_all_variables().run()
@@ -114,8 +114,8 @@ def main(_):
 
         # assign final state to rnn
         state_list = []
-        for c, h in model.initial_state:
-          state_list.extend([c.eval(), h.eval()])
+        for state in model.initial_state:
+          state_list.extend([state.eval()])
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
@@ -124,12 +124,12 @@ def main(_):
           feed = {model.input_data: x, model.targets: y}
 
           for i in range(len(model.initial_state)):
-            c, h = model.initial_state[i]
-            feed[c], feed[h] = state_list[i*2:(i+1)*2]
+            state = model.initial_state[i]
+            feed[state] = state_list[i]
 
           fetchs = [model.merged, model.cost, model.train_op]
-          for c, h in model.final_state:
-            fetchs.extend([c, h])
+          for state in model.final_state:
+            fetchs.extend([state])
 
           res = sess.run(fetchs, feed)
           summary = res[0]
