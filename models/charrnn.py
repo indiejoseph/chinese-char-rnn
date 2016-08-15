@@ -75,7 +75,7 @@ class CharRNN(Model):
                                vocab_size)
     self.l2_penalized += tf.nn.l2_loss(softmax_w)
     self.l2_penalized += tf.nn.l2_loss(softmax_b)
-    self.cost = (tf.reduce_sum(self.loss) / batch_size / seq_length) + l2_reg_lambda * self.l2_penalized
+    self.cost = (tf.reduce_sum(self.loss)  + l2_reg_lambda * self.l2_penalized) / batch_size / seq_length
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
