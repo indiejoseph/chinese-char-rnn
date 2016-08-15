@@ -40,7 +40,7 @@ class CharRNN(Model):
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     # Keeping track of l2 regularization loss (optional)
-    l2_penalized = tf.constant(0.0)
+    self.l2_penalized = tf.constant(0.0)
 
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
@@ -73,8 +73,9 @@ class CharRNN(Model):
                                tf.to_int64(train_labels),
                                nce_samples,
                                vocab_size)
-    l2_penalized = tf.nn.l2_loss(softmax_w) + tf.nn.l2_loss(softmax_b)
-    self.cost = (tf.reduce_sum(self.loss) / batch_size / seq_length) + (l2_reg_lambda * l2_penalized)
+    self.l2_penalized += tf.nn.l2_loss(softmax_w)
+    self.l2_penalized += tf.nn.l2_loss(softmax_b)
+    self.cost = (tf.reduce_sum(self.loss) / batch_size / seq_length) + l2_reg_lambda * self.l2_penalized
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
