@@ -45,8 +45,8 @@ class CharRNN(Model):
 
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding", shape=[vocab_size, rnn_size],
-                                         initializer=tf.contrib.layers.xavier_initializer(uniform=True))
+        self.embedding = tf.get_variable("embedding",
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     with tf.variable_scope('decode'):
