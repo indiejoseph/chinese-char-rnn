@@ -202,10 +202,10 @@ def main(_):
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}), train_loss = {:.2f}, time/batch = {:.2f}" \
+          print "{}/{} (epoch {}) train_loss = {:.2f} last_valid = {:.2f} time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, time_batch)
+                      e, train_cost, valid_cost, time_batch)
 
           # save model to checkpoint
           if (e * data_loader.num_batches + b) % FLAGS.save_every == 0:
