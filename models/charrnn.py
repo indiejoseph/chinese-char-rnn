@@ -13,10 +13,6 @@ class CharRNN(Model):
 
     Model.__init__(self)
 
-    if infer:
-      batch_size = 1
-      seq_length = 1
-
     self.sess = sess
     self.batch_size = batch_size
     self.seq_length = seq_length
@@ -30,20 +26,20 @@ class CharRNN(Model):
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
 
-    cell = GRUCell(rnn_size)
-
-    if not infer and self.keep_prob < 1:
-      cell = tf.nn.rnn_cell.DropoutWrapper(cell, self.keep_prob)
-
-    self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
-    self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length])
-    self.targets = tf.placeholder(tf.int32, [batch_size, seq_length])
-    self.initial_state = cell.zero_state(batch_size, tf.float32)
-
-    # Keeping track of l2 regularization loss (optional)
-    self.l2_penalized = tf.constant(0.0)
-
     with tf.variable_scope('rnnlm'):
+      cell = GRUCell(rnn_size)
+
+      if not infer and self.keep_prob < 1:
+        cell = tf.nn.rnn_cell.DropoutWrapper(cell, self.keep_prob)
+
+      self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
+      self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
+      self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
+      self.initial_state = cell.zero_state(batch_size, tf.float32)
+
+      # Keeping track of l2 regularization loss (optional)
+      self.l2_penalized = tf.constant(0.0)
+
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding",
                                          initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
@@ -81,10 +77,8 @@ class CharRNN(Model):
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
-    tf.scalar_summary("learning rate", self.learning_rate)
     tf.scalar_summary("cost", self.cost)
-    tf.histogram_summary("loss", self.loss)
-    self.merged = tf.merge_all_summaries()
+    self.merged_summary = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):
     self.initial_state = self.cell.zero_state(1, tf.float32)

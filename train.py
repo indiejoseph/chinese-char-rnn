@@ -27,7 +27,6 @@ flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularizaion lambda (default: 0.0)")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
-flags.DEFINE_integer("summary_every", 1000, "Write summary every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -55,6 +54,31 @@ def compute_similarity (model, valid_size=16, valid_window=100, offset=0):
 
   return similarity, valid_examples, valid_dataset
 
+def run_epochs(sess, x, y, states, model, get_summary=True, is_training=True):
+  start = time.time()
+  feed = {model.input_data: x, model.targets: y}
+
+  for i in xrange(len(model.initial_state)):
+    state = model.initial_state[i]
+    feed[state] = states[i]
+
+  if is_training:
+    extra_op = model.train_op
+  else:
+    extra_op = tf.no_op()
+
+  if get_summary:
+    fetchs = [model.merged_summary, model.cost, extra_op]
+  else:
+    fetchs = [model.cost, extra_op]
+
+  for state in model.final_state:
+    fetchs.extend([state])
+
+  res = sess.run(fetchs, feed)
+  end = time.time()
+
+  return res, end - start
 
 def main(_):
   pp.pprint(FLAGS.__flags)
@@ -63,84 +87,102 @@ def main(_):
     print " [*] Creating checkpoint directory..."
     os.makedirs(FLAGS.checkpoint_dir)
 
-  if FLAGS.sample:
-    infer = True
-  else:
-    infer = False
-
   data_loader = TextLoader(os.path.join(FLAGS.data_dir, FLAGS.dataset_name),
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
   graph = tf.Graph()
-  valid_size = 30
+  valid_size = 50
   valid_window = 100
 
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
-    model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                    FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
-                    FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
-                    FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=infer)
-    writer = tf.train.SummaryWriter(FLAGS.log_dir, graph_info)
+
+    with graph.as_default():
+      with tf.name_scope('training'):
+        train_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
+                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
+      tf.get_variable_scope().reuse_variables()
+      with tf.name_scope('validation'):
+        valid_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
+                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+      with tf.name_scope('sample'):
+        simple_model = CharRNN(sess, vocab_size, 1,
+                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        1, FLAGS.grad_clip, FLAGS.keep_prob,
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+
+    train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
+    valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
     tf.initialize_all_variables().run()
 
     if FLAGS.sample:
       # load checkpoints
-      if model.load(model.checkpoint_dir, model.dataset_name):
-        print " [*] SUCCESS to load model for %s." % model.dataset_name
+      if simple_model.load(simple_model.checkpoint_dir, simple_model.dataset_name):
+        print " [*] SUCCESS to load model for %s." % simple_model.dataset_name
       else:
-        print " [!] Failed to load model for %s." % model.dataset_name
+        print " [!] Failed to load model for %s." % simple_model.dataset_name
         sys.exit(1)
 
       sample = normalize_unicodes(FLAGS.sample)
-      print model.sample(sess, data_loader.chars, data_loader.vocab, 200, sample)
+      print simple_model.sample(sess, data_loader.chars, data_loader.vocab, 200, sample)
 
     elif FLAGS.export:
       print "Eval..."
-      final_embeddings = model.embedding.eval(sess)
+      final_embeddings = train_model.embedding.eval(sess)
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
       print "Embedding shape: {}".format(final_embeddings.shape)
       np.save(emb_file, final_embeddings)
 
     else: # Train
       current_step = 0
-      similarity, valid_examples, _ = compute_similarity(model, valid_size, valid_window, 6)
+      similarity, valid_examples, _ = compute_similarity(train_model, valid_size, valid_window, 6)
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
-        sess.run(tf.assign(model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
+        sess.run(tf.assign(train_model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
 
         data_loader.reset_batch_pointer()
 
         # assign final state to rnn
         state_list = []
-        for state in model.initial_state:
+        for state in train_model.initial_state:
           state_list.extend([state.eval()])
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
-          start = time.time()
           x, y = data_loader.next_batch()
-          feed = {model.input_data: x, model.targets: y}
-
-          for i in xrange(len(model.initial_state)):
-            state = model.initial_state[i]
-            feed[state] = state_list[i]
-
-          fetchs = [model.merged, model.cost, model.train_op]
-          for state in model.final_state:
-            fetchs.extend([state])
-
-          res = sess.run(fetchs, feed)
+          res, time_batch = run_epochs(sess, x, y, state_list, train_model)
           summary = res[0]
           train_cost = res[1]
           state_list = res[3:]
-          end = time.time()
-
-          if current_step % FLAGS.summary_every == 0:
-            writer.add_summary(summary, current_step)
 
           if current_step % FLAGS.valid_every == 0:
+            valid_state = []
+            valid_cost = 0
+            for state in valid_model.initial_state:
+              valid_state.extend([state.eval()])
+
+            for vb in xrange(data_loader.num_valid_batches):
+              res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
+                                                 valid_state, valid_model, False)
+              valid_cost += res[0]
+
+            valid_cost /= data_loader.num_valid_batches
+            valid_writer.add_summary(tf.scalar_summary("cost", valid_cost).eval())
+            valid_writer.flush()
+
+            print "### valide_loss = {:.2f}, time/batch = {:.2f}" \
+              .format(valid_cost, valid_time_batch)
+
+            # write summary
+            train_writer.add_summary(summary, current_step)
+            train_writer.flush()
+
+            # Write a similarity log
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
             log_str = ""
             sim = similarity.eval()
@@ -159,17 +201,18 @@ def main(_):
             text_file.write(log_str)
             text_file.close()
 
+          # print log
           print "{}/{} (epoch {}), train_loss = {:.2f}, time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, end - start)
+                      e, train_cost, time_batch)
 
+          # save model to checkpoint
           if (e * data_loader.num_batches + b) % FLAGS.save_every == 0:
-            # save to checkpoint
-            model.save(FLAGS.checkpoint_dir, FLAGS.dataset_name)
+            train_model.save(FLAGS.checkpoint_dir, FLAGS.dataset_name)
             print "model saved to {}".format(FLAGS.checkpoint_dir)
 
-          current_step = tf.train.global_step(sess, model.global_step)
+          current_step = tf.train.global_step(sess, train_model.global_step)
 
 
 if __name__ == '__main__':

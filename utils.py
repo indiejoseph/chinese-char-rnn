@@ -83,21 +83,26 @@ class TextLoader():
     input_file = os.path.join(data_dir, "input.txt")
     vocab_file = os.path.join(data_dir, "vocab.pkl")
     tensor_file = os.path.join(data_dir, "data.npy")
+    vdata_file = os.path.join(data_dir, "valid.npy")
+    valid_file = os.path.join(data_dir, "valid.txt")
 
     if not (os.path.exists(vocab_file) and os.path.exists(tensor_file)):
       print "reading text file"
-      self.preprocess(input_file, vocab_file, tensor_file)
+      self.preprocess(input_file, vocab_file, tensor_file, vdata_file, valid_file)
     else:
       print "loading preprocessed files"
-      self.load_preprocessed(vocab_file, tensor_file)
+      self.load_preprocessed(vocab_file, tensor_file, vdata_file)
     self.create_batches()
     self.reset_batch_pointer()
 
-  def preprocess(self, input_file, vocab_file, tensor_file):
+  def preprocess(self, input_file, vocab_file, tensor_file, vdata_file, valid_file):
     with codecs.open(input_file, "r", encoding=self.encoding) as f:
-      data = f.read()
-      data = normalize_unicodes(data)
-    counter = collections.Counter(data)
+      train_data = f.read()
+      train_data = normalize_unicodes(train_data)
+    with codecs.open(valid_file, "r", encoding=self.encoding) as f:
+      valid_data = f.read()
+      valid_data = normalize_unicodes(valid_data)
+    counter = collections.Counter(train_data)
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
     self.chars, counts = zip(*count_pairs)
     threshold = 10
@@ -107,31 +112,43 @@ class TextLoader():
     with open(vocab_file, 'wb') as f:
       cPickle.dump(self.chars, f)
     unk_index = START_VOCAB.index(UNK)
-    self.tensor = np.array([self.vocab.get(c, unk_index) for c in data])
+    self.tensor = np.array([self.vocab.get(c, unk_index) for c in train_data], dtype=np.int64)
+    self.valid = np.array([self.vocab.get(c, unk_index) for c in valid_data], dtype=np.int64)
     np.save(tensor_file, self.tensor)
+    np.save(vdata_file, self.valid)
 
-  def load_preprocessed(self, vocab_file, tensor_file):
+  def load_preprocessed(self, vocab_file, tensor_file, vdata_file):
     with open(vocab_file, 'rb') as f:
       self.chars = cPickle.load(f)
     self.vocab_size = len(self.chars)
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
     self.tensor = np.load(tensor_file)
+    self.valid = np.load(vdata_file)
     self.num_batches = int(self.tensor.size / (self.batch_size *
                            self.seq_length))
 
   def create_batches(self):
     self.num_batches = int(self.tensor.size / (self.batch_size *
                            self.seq_length))
+    self.num_valid_batches = int(self.valid.size / (self.batch_size *
+                           self.seq_length))
 
     # When the data (tensor) is too small, let's give them a better error message
-    if self.num_batches==0:
+    if self.num_batches == 0:
       assert False, "Not enough data. Make seq_length and batch_size small."
 
     self.tensor = self.tensor[:self.num_batches * self.batch_size * self.seq_length]
+    self.valid = self.valid[:self.num_valid_batches * self.batch_size * self.seq_length]
     xdata = self.tensor
     ydata = np.copy(self.tensor)
     ydata[:-1] = xdata[1:]
     ydata[-1] = xdata[0]
+    x_valid = self.valid
+    y_valid = np.copy(self.valid)
+    y_valid[:-1] = x_valid[1:]
+    y_valid[-1] = x_valid[0]
+    self.x_valid = np.split(x_valid.reshape(self.batch_size, -1), self.num_valid_batches, 1)
+    self.y_valid = np.split(y_valid.reshape(self.batch_size, -1), self.num_valid_batches, 1)
     self.x_batches = np.split(xdata.reshape(self.batch_size, -1), self.num_batches, 1)
     self.y_batches = np.split(ydata.reshape(self.batch_size, -1), self.num_batches, 1)
 
