@@ -58,9 +58,9 @@ def run_epochs(sess, x, y, states, model, get_summary=True, is_training=True):
   start = time.time()
   feed = {model.input_data: x, model.targets: y}
 
-  for i in xrange(len(model.initial_state)):
-    state = model.initial_state[i]
-    feed[state] = states[i]
+  for i in range(len(model.initial_state)):
+    c, h = model.initial_state[i]
+    feed[c], feed[h] = states[i*2:(i+1)*2]
 
   if is_training:
     extra_op = model.train_op
@@ -72,8 +72,8 @@ def run_epochs(sess, x, y, states, model, get_summary=True, is_training=True):
   else:
     fetchs = [model.cost, extra_op]
 
-  for state in model.final_state:
-    fetchs.extend([state])
+  for c, h in model.final_state:
+    fetchs.extend([c, h])
 
   res = sess.run(fetchs, feed)
   end = time.time()
@@ -149,8 +149,8 @@ def main(_):
 
         # assign final state to rnn
         state_list = []
-        for state in train_model.initial_state:
-          state_list.extend([state.eval()])
+        for c, h in train_model.initial_state:
+          state_list.extend([c.eval(), h.eval()])
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
@@ -163,8 +163,9 @@ def main(_):
           if current_step % FLAGS.valid_every == 0:
             valid_state = []
             valid_cost = 0
-            for state in valid_model.initial_state:
-              valid_state.extend([state.eval()])
+
+            for c, h in valid_model.initial_state:
+              valid_state.extend([c.eval(), h.eval()])
 
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
@@ -172,7 +173,7 @@ def main(_):
               valid_cost += res[0]
 
             valid_cost /= data_loader.num_valid_batches
-            valid_writer.add_summary(tf.scalar_summary("cost", valid_cost).eval())
+            valid_writer.add_summary(tf.scalar_summary("cost", valid_cost).eval(), current_step)
             valid_writer.flush()
 
             print "### valide_loss = {:.2f}, time/batch = {:.2f}" \

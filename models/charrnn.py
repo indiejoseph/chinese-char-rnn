@@ -1,7 +1,7 @@
 import sys
 from base import Model
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import GRUCell
+from tensorflow.python.ops.rnn_cell import LSTMCell
 import numpy as np
 
 
@@ -27,7 +27,7 @@ class CharRNN(Model):
     self.keep_prob = keep_prob
 
     with tf.variable_scope('rnnlm'):
-      cell = GRUCell(rnn_size)
+      cell = LSTMCell(rnn_size, state_is_tuple=True)
 
       if not infer and self.keep_prob < 1:
         cell = tf.nn.rnn_cell.DropoutWrapper(cell, self.keep_prob)
@@ -85,8 +85,8 @@ class CharRNN(Model):
 
     # assign final state to rnn
     state_list = []
-    for state in self.initial_state:
-      state_list.extend([state.eval()])
+    for c, h in self.initial_state:
+      state_list.extend([c.eval(), h.eval()])
 
     prime = prime.decode('utf-8')
 
@@ -96,10 +96,10 @@ class CharRNN(Model):
       feed = {self.input_data: x}
       fetchs = []
       for i in range(len(self.initial_state)):
-        state = self.initial_state[i]
-        feed[state] = state_list[i]
-      for state in self.final_state:
-        fetchs.extend([state])
+        c, h = self.initial_state[i]
+        feed[c], feed[h] = state_list[i*2:(i+1)*2]
+      for c, h in self.final_state:
+        fetchs.extend([c, h])
       state_list = sess.run(fetchs, feed)
 
     def weighted_pick(weights):
@@ -116,10 +116,10 @@ class CharRNN(Model):
       feed = {self.input_data: x}
       fetchs = [self.probs]
       for i in range(len(self.initial_state)):
-        state = self.initial_state[i]
-        feed[state] = state_list[i]
-      for state in self.final_state:
-        fetchs.extend([state])
+        c, h = self.initial_state[i]
+        feed[c], feed[h] = state_list[i*2:(i+1)*2]
+      for c, h in self.final_state:
+        fetchs.extend([c, h])
       res = sess.run(fetchs, feed)
       probs = res[0]
       state_list = res[1:]
