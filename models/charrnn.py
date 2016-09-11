@@ -9,7 +9,7 @@ from tensorflow.python.ops import array_ops
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
-               rnn_size=128, nce_samples=10, l2_reg_lambda=.2,
+               rnn_size=128, nce_samples=10, ponder_time_penalty=0.01,
                seq_length=50, grad_clip=5., epsilon=0.01, max_computation=50, use_lstm=False,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -21,16 +21,13 @@ class CharRNN(Model):
     self.use_lstm = use_lstm
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
-    self.l2_reg_lambda = l2_reg_lambda
+    self.ponder_time_penalty = ponder_time_penalty
 
     # RNN
     self.rnn_size = rnn_size
     self.grad_clip = grad_clip
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
-
-    # Keeping track of l2 regularization loss (optional)
-    self.l2_penalized = tf.constant(0.0)
 
     # set up ACT cell and inner rnn-type cell for use inside the ACT cell
     with tf.variable_scope("rnn"):
@@ -40,6 +37,7 @@ class CharRNN(Model):
         inner_cell = rnn_cell.GRUCell(rnn_size)
 
     self.initial_state = inner_cell.zero_state(batch_size, tf.float32)
+
     # self.initial_state = array_ops.zeros(
     #   array_ops.pack([batch_size, seq_length]),
     #   dtype=tf.float32).set_shape([None, seq_length])
@@ -76,9 +74,10 @@ class CharRNN(Model):
                                tf.to_int64(train_labels),
                                nce_samples,
                                vocab_size)
-    self.l2_penalized += tf.nn.l2_loss(softmax_w)
-    self.l2_penalized += tf.nn.l2_loss(softmax_b)
-    self.cost = (tf.reduce_sum(self.loss)  + l2_reg_lambda * self.l2_penalized) / batch_size / seq_length
+
+    # add up loss and retrieve batch-normalised ponder cost: sum N + sum Remainder
+    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length + \
+                act.CalculatePonderCost(time_penalty=self.ponder_time_penalty) # ACT Calculate Ponder Cost
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)

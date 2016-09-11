@@ -22,11 +22,11 @@ flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay rate [0.95]")
 flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
-flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularizaion lambda (default: 0.0)")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("valid_every", 500, "Validate every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_float("epsilon", 0.01, "ACT epsilon")
+flags.DEFINE_float("ponder_time_penalty", 0.01, "Ponder Time Penalty")
 flags.DEFINE_boolean("use_lstm", False, "Use LSTM")
 flags.DEFINE_integer("max_computation", 50, "ACT Maximum computation")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
@@ -94,18 +94,18 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
                         FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
                         FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(sess, vocab_size, 1,
-                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
                         1, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 
