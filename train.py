@@ -17,17 +17,18 @@ pp = pprint.PrettyPrinter()
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
 flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [128]")
-flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay rate [0.95]")
 flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
-flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularizaion lambda (default: 0.0)")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("valid_every", 500, "Validate every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
+flags.DEFINE_float("epsilon", 0.01, "ACT epsilon")
+flags.DEFINE_boolean("use_lstm", False, "Use LSTM")
+flags.DEFINE_integer("max_computation", 50, "ACT Maximum computation")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
@@ -56,11 +57,7 @@ def compute_similarity (model, valid_size=16, valid_window=100, offset=0):
 
 def run_epochs(sess, x, y, states, model, get_summary=True, is_training=True):
   start = time.time()
-  feed = {model.input_data: x, model.targets: y}
-
-  for i in range(len(model.initial_state)):
-    c, h = model.initial_state[i]
-    feed[c], feed[h] = states[i*2:(i+1)*2]
+  feed = {model.input_data: x, model.targets: y, model.initial_state: states}
 
   if is_training:
     extra_op = model.train_op
@@ -68,12 +65,9 @@ def run_epochs(sess, x, y, states, model, get_summary=True, is_training=True):
     extra_op = tf.no_op()
 
   if get_summary:
-    fetchs = [model.merged_summary, model.cost, extra_op]
+    fetchs = [model.merged_summary, model.cost, extra_op, model.final_state]
   else:
-    fetchs = [model.cost, extra_op]
-
-  for c, h in model.final_state:
-    fetchs.extend([c, h])
+    fetchs = [model.cost, extra_op, model.final_state]
 
   res = sess.run(fetchs, feed)
   end = time.time()
@@ -100,19 +94,19 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
-                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
+                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
-                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
+                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(sess, vocab_size, 1,
-                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
-                        1, FLAGS.grad_clip, FLAGS.keep_prob,
+                        FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        1, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
@@ -148,24 +142,19 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         # assign final state to rnn
-        state_list = []
-        for c, h in train_model.initial_state:
-          state_list.extend([c.eval(), h.eval()])
+        state = train_model.initial_state.eval()
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
-          res, time_batch = run_epochs(sess, x, y, state_list, train_model)
+          res, time_batch = run_epochs(sess, x, y, state, train_model)
           summary = res[0]
           train_cost = res[1]
-          state_list = res[3:]
+          state = res[3]
 
           if current_step % FLAGS.valid_every == 0:
-            valid_state = []
+            valid_state = valid_model.initial_state.eval()
             valid_cost = 0
-
-            for c, h in valid_model.initial_state:
-              valid_state.extend([c.eval(), h.eval()])
 
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
