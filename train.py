@@ -20,7 +20,7 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
+flags.DEFINE_float("learning_rate", 1e-2, "Learning rate [1e-2]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay rate [0.95]")
 flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
@@ -139,12 +139,12 @@ def main(_):
 
     else: # Train
       current_step = 0
+      previous_losses = []
+      train_loss_value = 0
       similarity, valid_examples, _ = compute_similarity(train_model, valid_size, valid_window, 6)
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
-        sess.run(tf.assign(train_model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
-
         data_loader.reset_batch_pointer()
 
         # assign final state to rnn
@@ -159,6 +159,8 @@ def main(_):
           summary = res[0]
           train_cost = res[1]
           state_list = res[3:]
+
+          train_loss_value = train_loss_value + train_cost
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = []
@@ -178,6 +180,13 @@ def main(_):
 
             print "### valide_loss = {:.2f}, time/batch = {:.2f}" \
               .format(valid_cost, valid_time_batch)
+
+            # Decrease learning rate if no improvement was seen over last 3 times.
+            if len(previous_losses) > 2 and train_loss_value > max(previous_losses[-3:]):
+              sess.run(tf.assign(train_model.learning_rate, FLAGS.learning_rate * FLAGS.decay_rate))
+
+            previous_losses.append(train_loss_value)
+            train_loss_value = 0
 
             # write summary
             train_writer.add_summary(summary, current_step)
