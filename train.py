@@ -142,6 +142,7 @@ def main(_):
       previous_losses = []
       train_loss_value = 0
       similarity, valid_examples, _ = compute_similarity(train_model, valid_size, valid_window, 6)
+      learning_rate_decay_op = train_model.learning_rate.assign(train_model.learning_rate * FLAGS.decay_rate)
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
@@ -183,7 +184,7 @@ def main(_):
 
             # Decrease learning rate if no improvement was seen over last 3 times.
             if len(previous_losses) > 2 and train_loss_value > max(previous_losses[-3:]):
-              sess.run(tf.assign(train_model.learning_rate, FLAGS.learning_rate * FLAGS.decay_rate))
+              sess.run(learning_rate_decay_op)
 
             previous_losses.append(train_loss_value)
             train_loss_value = 0
