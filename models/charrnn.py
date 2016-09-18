@@ -1,7 +1,8 @@
 import sys
 from base import Model
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import LSTMCell
+# from tensorflow.python.ops.rnn_cell import LSTMCell
+from mirnn import MILSTMCell
 import numpy as np
 
 
@@ -27,7 +28,7 @@ class CharRNN(Model):
     self.keep_prob = keep_prob
 
     with tf.variable_scope('rnnlm'):
-      cell = LSTMCell(rnn_size, state_is_tuple=True)
+      cell = MILSTMCell(rnn_size, state_is_tuple=True)
 
       if not infer and self.keep_prob < 1:
         cell = tf.nn.rnn_cell.DropoutWrapper(cell, self.keep_prob)
