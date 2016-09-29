@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import division
+from __future__ import print_function
+import pickle, os, sys
 import tensorflow as tf
 from tensorflow.python.ops.nn import rnn_cell, rnn, seq2seq
 from tensorflow.python.ops import control_flow_ops, gen_math_ops
@@ -9,16 +14,15 @@ class ACTCell(rnn_cell.RNNCell):
   """An RNN cell implementing Graves' Adaptive Computation Time algorithm"""
 
 
-  def __init__(self, num_units, cell, epsilon, max_computation, batch_size, sigmoid_output=False):
+  def __init__(self, num_units, cell, epsilon, max_computation, batch_size):
 
     self.batch_size = batch_size
-    self.one_minus_eps = tf.constant(1.0 - epsilon, tf.float32, [self.batch_size])
+    self.one_minus_eps = tf.constant(1.0 - epsilon, tf.float32,[self.batch_size])
     self._num_units = num_units
     self.cell = cell
     self.N = tf.constant(max_computation, tf.float32,[self.batch_size])
     self.ACT_remainder = []
     self.ACT_iterations = []
-    self.sigmoid_output = sigmoid_output
 
   @property
   def input_size(self):
@@ -30,7 +34,7 @@ class ACTCell(rnn_cell.RNNCell):
   def state_size(self):
     return self._num_units
 
-  def __call__(self, inputs, state, timestep=0, scope=None):
+  def __call__(self, inputs, state, timestep = 0, scope=None):
 
     with vs.variable_scope(scope or type(self).__name__):
 
@@ -66,9 +70,6 @@ class ACTCell(rnn_cell.RNNCell):
     self.ACT_remainder.append(tf.reduce_mean(1 - remainders))
     self.ACT_iterations.append(tf.reduce_mean(iterations))
 
-    if self.sigmoid_output:
-      output = tf.sigmoid(rnn_cell._linear(output,self.batch_size,0.0))
-
     return output, next_state
 
 
@@ -80,7 +81,7 @@ class ACTCell(rnn_cell.RNNCell):
       tf.add_n(self.ACT_remainder)/len(self.ACT_remainder) +
       tf.to_float(tf.add_n(self.ACT_iterations)/len(self.ACT_iterations)))
 
-  def ACTStep(self, batch_mask, prob_compare, prob, counter, state, input, acc_outputs, acc_states):
+  def ACTStep(self,batch_mask,prob_compare,prob,counter,state,input,acc_outputs,acc_states):
 
     # General idea: generate halting probabilites and accumulate them. Stop when the accumulated probs
     # reach a halting value, 1-eps. At each timestep, multiply the prob with the rnn output/state.
@@ -93,20 +94,21 @@ class ACTCell(rnn_cell.RNNCell):
 
 
     # if all the probs are zero, we are seeing a new input => binary flag := 1, else 0.
-    binary_flag = tf.cond(tf.reduce_all(tf.equal(prob, 0.0)),
-                lambda: tf.ones([self.batch_size, 1], dtype=tf.float32),
-                lambda: tf.zeros([self.batch_size, 1], tf.float32))
+    binary_flag = tf.cond(tf.reduce_all(tf.equal(prob,0.0)),
+                lambda: tf.ones([self.batch_size,1],dtype=tf.float32),
+                lambda: tf.zeros([self.batch_size,1],tf.float32))
 
     input_with_flags = tf.concat(1, [binary_flag,input])
+
     output, new_state = rnn(self.cell, [input_with_flags], state, scope=type(self.cell).__name__)
 
 
     with tf.variable_scope('sigmoid_activation_for_pondering'):
-      p = tf.squeeze(tf.sigmoid(rnn_cell._linear(new_state, 1, True)))
+      p = tf.squeeze(tf.sigmoid(tf.nn.rnn_cell._linear(new_state, 1, True)))
 
     # multiply by the previous mask as if we stopped before, we don't want to start again
     # if we generate a p less than p_t-1 for a given example.
-    new_batch_mask = tf.logical_and(tf.less(prob + p, self.one_minus_eps), batch_mask)
+    new_batch_mask = tf.logical_and(tf.less(prob + p,self.one_minus_eps),batch_mask)
 
     new_float_mask = tf.cast(new_batch_mask, tf.float32)
 
@@ -128,9 +130,9 @@ class ACTCell(rnn_cell.RNNCell):
       # exactly the probability at N-1, ie the timestep before we
       # go over 1-eps for all elements of the batch.
 
-      remainder = tf.constant(1.0, tf.float32, [self.batch_size]) - prob
-      remainder_expanded = tf.expand_dims(remainder, 1)
-      tiled_remainder = tf.tile(remainder_expanded, [1, self.output_size])
+      remainder = tf.constant(1.0, tf.float32,[self.batch_size]) - prob
+      remainder_expanded = tf.expand_dims(remainder,1)
+      tiled_remainder = tf.tile(remainder_expanded,[1,self.output_size])
 
       acc_state = (new_state * tiled_remainder) + acc_states
       acc_output = (output[0] * tiled_remainder) + acc_outputs
@@ -145,7 +147,7 @@ class ACTCell(rnn_cell.RNNCell):
       # to acc_state or acc_output
 
       p_expanded = tf.expand_dims(p * new_float_mask,1)
-      tiled_p = tf.tile(p_expanded, [1, self.output_size])
+      tiled_p = tf.tile(p_expanded,[1,self.output_size])
 
       acc_state = (new_state * tiled_p) + acc_states
       acc_output = (output[0] * tiled_p) + acc_outputs
@@ -153,7 +155,7 @@ class ACTCell(rnn_cell.RNNCell):
 
     # only increase the counter for those probabilities that
     # did not go over 1-eps in this iteration.
-    counter += tf.constant(1.0, tf.float32,[self.batch_size]) * new_float_mask
+    counter += tf.constant(1.0,tf.float32,[self.batch_size]) * new_float_mask
 
 
     # halting condition(halts, and uses the remainder when this is FALSE):
@@ -165,4 +167,5 @@ class ACTCell(rnn_cell.RNNCell):
 
     acc_state, acc_output = tf.cond(condition, normal, use_remainder)
 
-    return [new_batch_mask, prob_compare, prob, counter, new_state, input, acc_output,acc_state]
+
+    return [new_batch_mask,prob_compare,prob,counter,new_state, input, acc_output,acc_state]

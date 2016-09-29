@@ -95,18 +95,18 @@ def main(_):
       with tf.name_scope('training'):
         train_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                         FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
-                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
+                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                         FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
-                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
+                        FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(sess, vocab_size, 1,
                         FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
-                        1, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation, FLAGS.use_lstm,
+                        1, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
