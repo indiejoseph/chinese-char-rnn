@@ -24,7 +24,6 @@ flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay rate [0.95]")
 flags.DEFINE_integer("nce_samples", 25, "NCE sample size [25]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
-flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularizaion lambda (default: 0.0)")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("valid_every", 500, "Validate every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
@@ -100,18 +99,18 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
                         FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
-                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
                         FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(sess, vocab_size, 1,
-                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.l2_reg_lambda,
+                        FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
                         1, FLAGS.grad_clip, FLAGS.keep_prob,
                         FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 
