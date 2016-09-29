@@ -27,7 +27,6 @@ flags.DEFINE_integer("valid_every", 500, "Validate every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_float("epsilon", 0.01, "ACT epsilon")
 flags.DEFINE_float("ponder_time_penalty", 0.01, "Ponder Time Penalty")
-flags.DEFINE_boolean("use_lstm", False, "Use LSTM")
 flags.DEFINE_integer("max_computation", 50, "ACT Maximum computation")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -96,18 +95,18 @@ def main(_):
         train_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                         FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
                         FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation,
-                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                         FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
                         FLAGS.seq_length, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation,
-                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name)
       with tf.name_scope('sample'):
         simple_model = CharRNN(sess, vocab_size, 1,
                         FLAGS.rnn_size, FLAGS.nce_samples, FLAGS.ponder_time_penalty,
                         1, FLAGS.grad_clip, FLAGS.epsilon, FLAGS.max_computation,
-                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
@@ -142,19 +141,24 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         # assign final state to rnn
-        state = train_model.initial_state.eval()
+        state_list = []
+        for c, h in train_model.initial_state:
+          state_list.extend([c.eval(), h.eval()])
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
-          res, time_batch = run_epochs(sess, x, y, state, train_model)
+          res, time_batch = run_epochs(sess, x, y, state_list, train_model)
           summary = res[0]
           train_cost = res[1]
-          state = res[3]
+          state_list = res[3:]
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = valid_model.initial_state.eval()
             valid_cost = 0
+
+            for c, h in valid_model.initial_state:
+              valid_state.extend([c.eval(), h.eval()])
 
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],

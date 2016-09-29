@@ -1,24 +1,24 @@
 import sys
 from base import Model
 import tensorflow as tf
-from tensorflow.python.ops.nn import rnn_cell
+from mirnn import MILSTMCell
 import numpy as np
 from ACTCell import ACTCell
 from tensorflow.python.ops import array_ops
+from tensorflow.contrib import learn
 
 
 class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
                rnn_size=128, nce_samples=10, ponder_time_penalty=0.01,
-               seq_length=50, grad_clip=5., epsilon=0.01, max_computation=50, use_lstm=False,
-               checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
+               seq_length=50, grad_clip=5., epsilon=0.01, max_computation=50,
+               checkpoint_dir="checkpoint", dataset_name="wiki"):
 
     Model.__init__(self)
 
     self.sess = sess
     self.batch_size = batch_size
     self.seq_length = seq_length
-    self.use_lstm = use_lstm
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
     self.ponder_time_penalty = ponder_time_penalty
@@ -29,32 +29,25 @@ class CharRNN(Model):
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
 
-    # set up ACT cell and inner rnn-type cell for use inside the ACT cell
-    with tf.variable_scope("rnn"):
-      if self.use_lstm:
-        inner_cell = rnn_cell.BasicLSTMCell(rnn_size)
-      else:
-        inner_cell = rnn_cell.GRUCell(rnn_size)
-
-    self.initial_state = inner_cell.zero_state(batch_size, tf.float32)
-
-    # self.initial_state = array_ops.zeros(
-    #   array_ops.pack([batch_size, seq_length]),
-    #   dtype=tf.float32).set_shape([None, seq_length])
+    with tf.variable_scope('rnnlm'):
+      cell = MILSTMCell(rnn_size, state_is_tuple=True)
 
     with tf.variable_scope("ACT"):
-      act = ACTCell(rnn_size, inner_cell, epsilon,
+      act = ACTCell(rnn_size, cell, epsilon,
                     max_computation=max_computation, batch_size=self.batch_size)
 
+    self.initial_state = cell.zero_state(batch_size, tf.float32)
+
     with tf.device("/cpu:0"):
-      self.embedding = tf.get_variable("embedding",
-                                       initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
+      self.embedding = tf.get_variable("embedding", shape=[vocab_size, rnn_size],
+                                       initializer=tf.contrib.layers.xavier_initializer())
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     with tf.variable_scope('decode'):
       softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
-                                  initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-      softmax_b = tf.get_variable("softmax_b", [vocab_size])
+                                  initializer=tf.contrib.layers.xavier_initializer())
+      softmax_b = tf.get_variable("softmax_b", [vocab_size],
+                                  initializer=tf.constant_initializer())
       outputs, self.final_state = tf.nn.dynamic_rnn(act,
                                                     inputs,
                                                     time_major=False,

@@ -37,7 +37,6 @@ class ACTCell(rnn_cell.RNNCell):
   def __call__(self, inputs, state, timestep = 0, scope=None):
 
     with vs.variable_scope(scope or type(self).__name__):
-
       # define within cell constants/ counters used to control while loop for ACTStep
       prob = tf.constant(0.0,tf.float32,[self.batch_size], name="prob")
       prob_compare = tf.constant(0.0,tf.float32,[self.batch_size], name="prob_compare")
@@ -101,7 +100,6 @@ class ACTCell(rnn_cell.RNNCell):
     input_with_flags = tf.concat(1, [binary_flag,input])
 
     output, new_state = rnn(self.cell, [input_with_flags], state, scope=type(self.cell).__name__)
-
 
     with tf.variable_scope('sigmoid_activation_for_pondering'):
       p = tf.squeeze(tf.sigmoid(tf.nn.rnn_cell._linear(new_state, 1, True)))
