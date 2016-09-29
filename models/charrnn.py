@@ -34,7 +34,7 @@ class CharRNN(Model):
       self.initial_state = cell.zero_state(batch_size, tf.float32)
 
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding",
+        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size],
                                          initializer=tf.contrib.layers.xavier_initializer())
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
