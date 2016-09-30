@@ -26,7 +26,7 @@ class CharRNN(Model):
     self.layer_depth = layer_depth
     self.grad_clip = grad_clip
 
-    with tf.variable_scope('rnnlm'):
+    with tf.variable_scope('rnnlm', initializer=tf.contrib.layers.xavier_initializer()):
       cell = MILSTMCell(rnn_size, state_is_tuple=True)
 
       self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
@@ -34,17 +34,17 @@ class CharRNN(Model):
       self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
       self.initial_state = cell.zero_state(batch_size, tf.float32)
 
-      with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
-        inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+    with tf.device("/cpu:0"):
+      self.embedding = tf.get_variable("embedding",
+                                       initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
+      inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
-    with tf.variable_scope('decode'):
+    with tf.variable_scope('output', initializer=tf.contrib.layers.xavier_initializer()):
       softmax_w = tf.get_variable("softmax_w",
                                   initializer=tf.truncated_normal([vocab_size, rnn_size],
                                               stddev=1.0 / math.sqrt(rnn_size)))
-      softmax_b = tf.get_variable("softmax_b", [vocab_size],
-                                  initializer=tf.constant_initializer())
+      softmax_b = tf.get_variable("softmax_b",
+                                  initializer=tf.constant(0.1, shape=[vocab_size]))
       outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
                                                     inputs,
                                                     time_major=False,
@@ -58,12 +58,15 @@ class CharRNN(Model):
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
     train_labels = tf.reshape(self.targets, [-1, 1])
-    self.loss = tf.reduce_mean(tf.nn.nce_loss(softmax_w,
-                                              softmax_b,
-                                              outputs,
-                                              train_labels,
-                                              nce_samples,
-                                              vocab_size))
+    self.loss = tf.reduce_mean(tf.nn.nce_loss(weights=softmax_w,
+                                              biases=softmax_b,
+                                              inputs=outputs,
+                                              labels=tf.to_int64(train_labels),
+                                              num_sampled=nce_samples,
+                                              num_classes=vocab_size,
+                                              num_true=1,
+                                              remove_accidental_hits=False,
+                                              name='nce_loss'))
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
