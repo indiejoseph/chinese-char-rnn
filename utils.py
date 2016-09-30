@@ -155,8 +155,8 @@ class TextLoader():
   def next_batch(self):
     x = np.copy(self.x_batches[self.pointer])
     y = self.y_batches[self.pointer]
-    # Dropword 10%
-    mask = np.random.choice([1, 0], size= x.shape, p=[.1, .9]).astype(np.bool)
+    # Dropword 5%
+    mask = np.random.choice([1, 0], size= x.shape, p=[.05, .95]).astype(np.bool)
     x[mask] = UNK_ID
     self.pointer += 1
     return x, y

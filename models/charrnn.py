@@ -1,4 +1,5 @@
 import sys
+import math
 from base import Model
 import tensorflow as tf
 # from tensorflow.python.ops.rnn_cell import LSTMCell
@@ -10,7 +11,7 @@ class CharRNN(Model):
   def __init__(self, sess, vocab_size, batch_size=100,
                layer_depth=2, rnn_size=128, nce_samples=10,
                seq_length=50, grad_clip=5.,
-               checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
+               checkpoint_dir="checkpoint", dataset_name="wiki"):
 
     Model.__init__(self)
 
@@ -34,13 +35,14 @@ class CharRNN(Model):
       self.initial_state = cell.zero_state(batch_size, tf.float32)
 
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size],
-                                         initializer=tf.contrib.layers.xavier_initializer())
+        self.embedding = tf.get_variable("embedding",
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     with tf.variable_scope('decode'):
-      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
-                                  initializer=tf.contrib.layers.xavier_initializer())
+      softmax_w = tf.get_variable("softmax_w",
+                                  initializer=tf.truncated_normal([vocab_size, rnn_size],
+                                              stddev=1.0 / math.sqrt(rnn_size)))
       softmax_b = tf.get_variable("softmax_b", [vocab_size],
                                   initializer=tf.constant_initializer())
       outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
@@ -56,21 +58,19 @@ class CharRNN(Model):
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
     train_labels = tf.reshape(self.targets, [-1, 1])
-    self.loss = tf.nn.nce_loss(softmax_w,
-                               softmax_b,
-                               outputs,
-                               tf.to_int64(train_labels),
-                               nce_samples,
-                               vocab_size)
-
-    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
+    self.loss = tf.reduce_mean(tf.nn.nce_loss(softmax_w,
+                                              softmax_b,
+                                              outputs,
+                                              train_labels,
+                                              nce_samples,
+                                              vocab_size))
 
     tvars = tf.trainable_variables()
-    optimizer = tf.train.AdamOptimizer(self.learning_rate)
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
+    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), grad_clip)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
-    tf.scalar_summary("cost", self.cost)
+    tf.scalar_summary("loss", self.loss)
     self.merged_summary = tf.merge_all_summaries()
 
   def sample(self, sess, chars, vocab, num=200, prime='The '):

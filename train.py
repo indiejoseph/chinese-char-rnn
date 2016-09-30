@@ -66,9 +66,9 @@ def run_epochs(sess, x, y, states, model, get_summary=True, is_training=True):
     extra_op = tf.no_op()
 
   if get_summary:
-    fetchs = [model.merged_summary, model.cost, extra_op]
+    fetchs = [model.merged_summary, model.loss, extra_op]
   else:
-    fetchs = [model.cost, extra_op]
+    fetchs = [model.loss, extra_op]
 
   for c, h in model.final_state:
     fetchs.extend([c, h])
@@ -100,18 +100,18 @@ def main(_):
         train_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                         FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
                         FLAGS.seq_length, FLAGS.grad_clip,
-                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(sess, vocab_size, FLAGS.batch_size,
                         FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
                         FLAGS.seq_length, FLAGS.grad_clip,
-                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name)
       with tf.name_scope('sample'):
         simple_model = CharRNN(sess, vocab_size, 1,
                         FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
                         1, FLAGS.grad_clip,
-                        FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+                        FLAGS.checkpoint_dir, FLAGS.dataset_name)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
@@ -155,7 +155,7 @@ def main(_):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, state_list, train_model)
           summary = res[0]
-          train_cost = res[1]
+          train_loss = res[1]
           state_list = res[3:]
 
           if current_step % FLAGS.valid_every == 0:
@@ -204,7 +204,7 @@ def main(_):
           print "{}/{} (epoch {}) train_loss = {:.2f} last_valid = {:.2f} time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, valid_cost, time_batch)
+                      e, train_loss, valid_cost, time_batch)
 
           # save model to checkpoint
           if (e * data_loader.num_batches + b) % FLAGS.save_every == 0:
