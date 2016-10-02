@@ -104,16 +104,14 @@ class TextLoader():
       valid_data = normalize_unicodes(valid_data)
     counter = collections.Counter(train_data)
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
-    self.chars, counts = zip(*count_pairs)
-    threshold = 10
-    self.chars = [c for i, c in enumerate(self.chars) if counts[i] > threshold]
+    self.chars, _ = zip(*count_pairs)
+    self.chars = START_VOCAB + [c for c in self.chars if c not in START_VOCAB]
     self.vocab_size = len(self.chars)
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
     with open(vocab_file, 'wb') as f:
       cPickle.dump(self.chars, f)
-    unk_index = START_VOCAB.index(UNK)
-    self.tensor = np.array([self.vocab.get(c, unk_index) for c in train_data], dtype=np.int64)
-    self.valid = np.array([self.vocab.get(c, unk_index) for c in valid_data], dtype=np.int64)
+    self.tensor = np.array([self.vocab.get(c, UNK_ID) for c in train_data], dtype=np.int64)
+    self.valid = np.array([self.vocab.get(c, UNK_ID) for c in valid_data], dtype=np.int64)
     np.save(tensor_file, self.tensor)
     np.save(vdata_file, self.valid)
 
