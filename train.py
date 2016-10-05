@@ -33,6 +33,7 @@ flags.DEFINE_string("log_dir", "log", "Log directory [log]")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("sample", "", "sample")
 flags.DEFINE_boolean("export", False, "Export embedding")
+flags.DEFINE_boolean("similarity", False, "Print similarity")
 FLAGS = flags.FLAGS
 
 def compute_similarity (model, valid_size=16, valid_window=100, offset=0):
@@ -135,6 +136,28 @@ def main(_):
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
       print "Embedding shape: {}".format(final_embeddings.shape)
       np.save(emb_file, final_embeddings)
+
+    elif FLAGS.similarity:
+      if simple_model.load(simple_model.checkpoint_dir, simple_model.dataset_name):
+        print " [*] SUCCESS to load model for %s." % simple_model.dataset_name
+      else:
+        print " [!] Failed to load model for %s." % simple_model.dataset_name
+        sys.exit(1)
+
+      similarity, valid_examples, _ = compute_similarity(simple_model, 100, 200, 4)
+
+      sim = similarity.eval()
+      log_str = ''
+      for i in xrange(100):
+        valid_word = data_loader.chars[valid_examples[i]]
+        top_k = 8 # number of nearest neighbors
+        nearest = (-sim[i, :]).argsort()[1:top_k+1]
+        log_str = log_str + "Nearest to %s:" % valid_word
+        for k in xrange(top_k):
+          close_word = data_loader.chars[nearest[k]]
+          log_str = "%s %s," % (log_str, close_word)
+        log_str = log_str + "\n"
+      print log_str
 
     else: # Train
       current_step = 0
