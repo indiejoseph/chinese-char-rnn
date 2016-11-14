@@ -8,7 +8,7 @@ import numpy as np
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=128,
+               layer_depth=2, rnn_size=128, num_sampled=120,
                seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -36,36 +36,50 @@ class CharRNN(Model):
     self.initial_state = self.cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope('rnnlm'):
-      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
+      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.5, 0.5))
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
     def loop(prev, _):
-      prev = tf.matmul(prev, softmax_w) + softmax_b
+      prev = tf.matmul(prev, softmax_w, transpose_b=True) + softmax_b
       prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
       return tf.nn.embedding_lookup(self.embedding, prev_symbol)
 
     outputs, last_state = seq2seq.rnn_decoder(inputs, self.initial_state, self.cell, loop_function=loop if infer else None, scope='rnnlm')
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
-    self.logits = tf.matmul(output, softmax_w) + softmax_b
+    self.logits = tf.matmul(output, softmax_w, transpose_b=True) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
-    loss = seq2seq.sequence_loss_by_example([self.logits],
-            [tf.reshape(self.targets, [-1])],
-            [tf.ones([batch_size * seq_length])],
-            vocab_size)
-    self.cost = tf.reduce_sum(loss) / batch_size / seq_length
+    labels = tf.reshape(self.targets, [-1])
+    loss = seq2seq.sequence_loss_by_example(
+      [self.logits], [labels],
+      [tf.ones([batch_size * seq_length])],
+      vocab_size)
+    self.cost = tf.reduce_sum(loss)
     self.final_state = last_state
+
+    sampled_loss_kwargs = dict(
+      weights=softmax_w,
+      biases=softmax_b,
+      inputs=output,
+      labels=tf.expand_dims(labels, 1),
+      num_sampled=num_sampled,
+      num_classes=vocab_size,
+      remove_accidental_hits=False,
+    )
+
+    train_loss = tf.nn.nce_loss(**sampled_loss_kwargs)
+    self.train_cost = tf.reduce_mean(train_loss)
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
     tvars = tf.trainable_variables()
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
-    optimizer = tf.train.AdamOptimizer(self.learning_rate)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.train_cost, tvars), grad_clip)
+    optimizer = tf.train.AdagradOptimizer(self.learning_rate)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
     tf.scalar_summary("cost", self.cost)

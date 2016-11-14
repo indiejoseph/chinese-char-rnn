@@ -20,8 +20,9 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
+flags.DEFINE_float("learning_rate", .2, "Learning rate [.2]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
+flags.DEFINE_integer("num_sampled", 120, "Number of noise sampled [120]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
 flags.DEFINE_integer("valid_every", 500, "Validate every")
@@ -140,18 +141,18 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size,
+                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_sampled,
                               FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size,
+                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_sampled,
                               FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
-                               FLAGS.layer_depth, FLAGS.rnn_size,
+                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_sampled,
                                1, FLAGS.grad_clip, FLAGS.keep_prob,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 
@@ -188,6 +189,12 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         state = sess.run(train_model.initial_state)
+        train_iter_size = FLAGS.batch_size * FLAGS.seq_length
+        valid_iter_size = data_loader.num_valid_batches * FLAGS.seq_length
+        train_iters = 0
+        valid_iters = 0
+        train_costs = 0
+        valid_costs = 0
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
@@ -196,6 +203,9 @@ def main(_):
           summary = res[0]
           train_cost = res[2]
           state = res[1]
+          train_iters += train_iter_size
+          train_costs += train_cost
+          train_perplexity = np.exp(train_costs / train_iters)
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = sess.run(valid_model.initial_state)
@@ -205,13 +215,15 @@ def main(_):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
               valid_cost += res[1]
+              valid_iters += valid_iter_size
+              valid_costs += valid_cost
+              valid_perplexity = np.exp(valid_costs / valid_iters)
 
-            valid_cost /= data_loader.num_valid_batches
-            valid_writer.add_summary(tf.scalar_summary("cost", valid_cost).eval(), current_step)
+            valid_writer.add_summary(tf.scalar_summary("valid_perplexity", valid_perplexity).eval(), current_step)
             valid_writer.flush()
 
-            print "### valide_loss = {:.2f}, time/batch = {:.2f}" \
-              .format(valid_cost, valid_time_batch)
+            print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
+              .format(valid_perplexity, valid_time_batch)
 
             # write summary
             train_writer.add_summary(summary, current_step)
@@ -237,10 +249,10 @@ def main(_):
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}) train_loss = {:.2f} last_valid = {:.2f} time/batch = {:.2f}" \
+          print "{}/{} (epoch {}) train_perplexity = {:.2f} last_valid = {:.2f} time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, valid_cost, time_batch)
+                      e, train_perplexity, valid_perplexity, time_batch)
 
           # save model to checkpoint
           if (e * data_loader.num_batches + b) % FLAGS.save_every == 0:
