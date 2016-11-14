@@ -82,9 +82,6 @@ class CharRNN(Model):
     optimizer = tf.train.AdagradOptimizer(self.learning_rate)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
-    tf.scalar_summary("cost", self.cost)
-    self.merged_summary = tf.merge_all_summaries()
-
 
 if __name__ == '__main__':
   model = CharRNN()

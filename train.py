@@ -98,7 +98,7 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
 
   return similarity, valid_examples, valid_dataset
 
-def run_epochs(sess, x, y, state, model, get_summary=True, is_training=True):
+def run_epochs(sess, x, y, state, model, is_training=True):
   start = time.time()
   feed = {model.input_data: x, model.targets: y}
 
@@ -111,10 +111,7 @@ def run_epochs(sess, x, y, state, model, get_summary=True, is_training=True):
   else:
     extra_op = tf.no_op()
 
-  if get_summary:
-    fetchs = [model.merged_summary, model.final_state, model.cost, extra_op]
-  else:
-    fetchs = [model.final_state, model.cost, extra_op]
+  fetchs = [model.final_state, model.cost, extra_op]
 
   res = sess.run(fetchs, feed)
   end = time.time()
@@ -200,23 +197,21 @@ def main(_):
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, state, train_model)
-          summary = res[0]
-          train_cost = res[2]
-          state = res[1]
+          train_cost = res[1]
+          state = res[0]
           train_iters += train_iter_size
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = sess.run(valid_model.initial_state)
-            valid_cost = 0
 
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
-              valid_cost += res[1]
+              valid_state = res[0]
               valid_iters += valid_iter_size
-              valid_costs += valid_cost
+              valid_costs += res[1]
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
             valid_writer.add_summary(tf.scalar_summary("valid_perplexity", valid_perplexity).eval(), current_step)
@@ -226,7 +221,7 @@ def main(_):
               .format(valid_perplexity, valid_time_batch)
 
             # write summary
-            train_writer.add_summary(summary, current_step)
+            train_writer.add_summary(tf.scalar_summary("train_perplexity", train_perplexity).eval(), current_step)
             train_writer.flush()
 
             # Write a similarity log
