@@ -20,7 +20,7 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 10e-3, "Learning rate [10e-3]")
+flags.DEFINE_float("learning_rate", 20e-2, "Learning rate [20e-2]")
 flags.DEFINE_float("decay_rate", 0.95, "Decay rate [0.95]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("save_every", 1000, "Save every")
@@ -41,7 +41,10 @@ def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1
   for char in prime[:-1]:
     x = np.zeros((1, 1))
     x[0, 0] = vocab[char]
-    feed = {model.input_data: x, model.initial_state: state}
+    feed = {model.input_data: x}
+    c, h = model.initial_state
+    feed[c] = state[0]
+    feed[h] = state[1]
     [state] = sess.run([model.final_state], feed)
 
   def weighted_pick(weights):
@@ -96,7 +99,11 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
 
 def run_epochs(sess, x, y, state, model, get_summary=True, is_training=True):
   start = time.time()
-  feed = {model.input_data: x, model.targets: y, model.initial_state: state}
+  feed = {model.input_data: x, model.targets: y}
+
+  c, h = model.initial_state
+  feed[c] = state[0]
+  feed[h] = state[1]
 
   if is_training:
     extra_op = model.train_op

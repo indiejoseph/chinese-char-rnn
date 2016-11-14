@@ -30,6 +30,7 @@ class CharRNN(Model):
     if not infer and keep_prob < 1:
       self.cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
+    self.cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
     self.initial_state = self.cell.zero_state(batch_size, tf.float32)
@@ -49,7 +50,7 @@ class CharRNN(Model):
       prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
       return tf.nn.embedding_lookup(self.embedding, prev_symbol)
 
-    outputs, last_state = seq2seq.rnn_decoder(inputs, self.initial_state, cell, loop_function=loop if infer else None, scope='rnnlm')
+    outputs, last_state = seq2seq.rnn_decoder(inputs, self.initial_state, self.cell, loop_function=loop if infer else None, scope='rnnlm')
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
