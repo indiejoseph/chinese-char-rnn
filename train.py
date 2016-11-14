@@ -186,8 +186,6 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         state = sess.run(train_model.initial_state)
-        train_iter_size = FLAGS.batch_size
-        valid_iter_size = data_loader.num_valid_batches
         train_iters = 0
         valid_iters = 0
         train_costs = 0
@@ -199,7 +197,7 @@ def main(_):
           res, time_batch = run_epochs(sess, x, y, state, train_model)
           train_cost = res[1]
           state = res[0]
-          train_iters += train_iter_size
+          train_iters += FLAGS.seq_length
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
@@ -210,7 +208,7 @@ def main(_):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
               valid_state = res[0]
-              valid_iters += valid_iter_size
+              valid_iters += FLAGS.seq_length
               valid_costs += res[1]
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
