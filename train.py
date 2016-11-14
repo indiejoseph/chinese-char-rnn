@@ -186,8 +186,8 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         state = sess.run(train_model.initial_state)
-        train_iter_size = FLAGS.batch_size * FLAGS.seq_length
-        valid_iter_size = data_loader.num_valid_batches * FLAGS.seq_length
+        train_iter_size = FLAGS.batch_size
+        valid_iter_size = data_loader.num_valid_batches
         train_iters = 0
         valid_iters = 0
         train_costs = 0

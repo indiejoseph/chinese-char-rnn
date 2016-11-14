@@ -2,7 +2,6 @@ import sys
 from base import Model
 import tensorflow as tf
 from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import seq2seq
 import numpy as np
 
 
@@ -50,11 +49,11 @@ class CharRNN(Model):
     self.logits = tf.matmul(output, softmax_w, transpose_b=True) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
     labels = tf.reshape(self.targets, [-1])
-    loss = seq2seq.sequence_loss_by_example(
+    loss = tf.nn.seq2seq.sequence_loss_by_example(
       [self.logits], [labels],
       [tf.ones([batch_size * seq_length])],
       vocab_size)
-    self.cost = tf.reduce_sum(loss)
+    self.cost = tf.reduce_sum(loss) / batch_size
     self.final_state = last_state
 
     sampled_loss_kwargs = dict(
