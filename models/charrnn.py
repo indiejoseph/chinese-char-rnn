@@ -24,7 +24,7 @@ class CharRNN(Model):
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
 
-    self.cell = cell = rnn_cell.GRUCell(rnn_size)
+    self.cell = cell = rnn_cell.BasicLSTMCell(rnn_size, forget_bias=0.0, state_is_tuple=True)
 
     if not infer and keep_prob < 1:
       self.cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
