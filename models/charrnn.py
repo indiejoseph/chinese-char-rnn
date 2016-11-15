@@ -7,7 +7,7 @@ import numpy as np
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=128, num_sampled=120,
+               layer_depth=2, rnn_size=128,
                seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
