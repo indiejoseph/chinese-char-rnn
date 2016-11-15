@@ -9,7 +9,7 @@ class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=128, num_sampled=120,
                seq_length=50, grad_clip=5., keep_prob=0.5,
-               checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
+               checkpoint_dir="checkpoint", dataset_name="wiki", infer=False, nce=False):
 
     Model.__init__(self)
 
@@ -66,8 +66,11 @@ class CharRNN(Model):
       remove_accidental_hits=False,
     )
 
-    train_loss = tf.nn.nce_loss(**sampled_loss_kwargs)
-    self.train_cost = tf.reduce_mean(train_loss)
+    if nce:
+      train_loss = tf.nn.nce_loss(**sampled_loss_kwargs)
+      self.train_cost = tf.reduce_mean(train_loss)
+    else:
+      self.train_cost = self.cost
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
