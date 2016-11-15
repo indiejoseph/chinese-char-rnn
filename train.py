@@ -22,7 +22,6 @@ flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", .2, "Learning rate [.2]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
-flags.DEFINE_integer("num_sampled", 120, "Number of noise sampled [120]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
@@ -137,18 +136,18 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_sampled,
+                              FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_sampled,
+                              FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
-                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_sampled,
+                               FLAGS.layer_depth, FLAGS.rnn_size,
                                1, FLAGS.grad_clip, FLAGS.keep_prob,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 

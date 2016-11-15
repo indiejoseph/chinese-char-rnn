@@ -56,16 +56,6 @@ class CharRNN(Model):
     self.cost = tf.reduce_sum(loss) / batch_size
     self.final_state = last_state
 
-    sampled_loss_kwargs = dict(
-      weights=softmax_w,
-      biases=softmax_b,
-      inputs=output,
-      labels=tf.expand_dims(labels, 1),
-      num_sampled=num_sampled,
-      num_classes=vocab_size,
-      remove_accidental_hits=False,
-    )
-
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
     tvars = tf.trainable_variables()
