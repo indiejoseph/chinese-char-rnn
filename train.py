@@ -110,8 +110,8 @@ def run_epochs(sess, x, y, state, model, is_training=True):
     extra_op = tf.no_op()
 
   fetchs = {
-    "final_state": model.final_state
-    "cost": model.cost
+    "final_state": model.final_state,
+    "cost": model.cost,
     "extra_op": extra_op
   }
 
