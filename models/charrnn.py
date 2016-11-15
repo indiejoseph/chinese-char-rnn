@@ -3,12 +3,11 @@ from base import Model
 import tensorflow as tf
 from tensorflow.python.ops import rnn_cell
 import numpy as np
-from FastWeightsRNN import LayerNormFastWeightsBasicRNNCell
 
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=128, embedding_size=128,
+               layer_depth=2, rnn_size=128,
                seq_length=50, grad_clip=5., keep_prob=0.5,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
@@ -25,11 +24,15 @@ class CharRNN(Model):
     self.grad_clip = grad_clip
     self.keep_prob = keep_prob
 
-    self.cell = LayerNormFastWeightsBasicRNNCell(num_units=rnn_size)
+    self.cell = cell = rnn_cell.BasicLSTMCell(rnn_size, forget_bias=0.0, state_is_tuple=True)
+
+    if not infer and keep_prob < 1:
+      self.cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
+
+    self.cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
     self.initial_state = self.cell.zero_state(batch_size, tf.float32)
-    self.initial_fast_weights = self.cell.zero_fast_weights(batch_size, tf.float32)
 
     with tf.variable_scope('rnnlm'):
       softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
@@ -37,12 +40,11 @@ class CharRNN(Model):
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding",
-                                         initializer=tf.random_uniform([vocab_size, embedding_size], -0.5, 0.5))
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.5, 0.5))
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
-    state = (self.initial_state, self.initial_fast_weights)
-    outputs, last_state = tf.nn.rnn(self.cell, inputs, initial_state=state)
+    outputs, last_state = tf.nn.rnn(self.cell, inputs, initial_state=self.initial_state)
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
