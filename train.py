@@ -24,8 +24,7 @@ flags.DEFINE_float("learning_rate", .2, "Learning rate [.2]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_integer("num_sampled", 120, "Number of noise sampled [120]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
-flags.DEFINE_integer("save_every", 1000, "Save every")
-flags.DEFINE_integer("valid_every", 500, "Validate every")
+flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -247,12 +246,10 @@ def main(_):
                       FLAGS.num_epochs * data_loader.num_batches,
                       e, train_perplexity, valid_perplexity, time_batch)
 
-          # save model to checkpoint
-          if (e * data_loader.num_batches + b) % FLAGS.save_every == 0:
-            train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-            print "model saved to {}".format(FLAGS.checkpoint_dir)
-
           current_step = tf.train.global_step(sess, train_model.global_step)
+
+      train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
+      print "model saved to {}".format(FLAGS.checkpoint_dir)
 
 
 if __name__ == '__main__':
