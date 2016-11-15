@@ -2,6 +2,7 @@ import sys
 from base import Model
 import tensorflow as tf
 from tensorflow.python.ops import rnn_cell
+from tensorflow.python.ops import seq2seq
 import numpy as np
 
 
@@ -44,7 +45,12 @@ class CharRNN(Model):
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
-    outputs, last_state = tf.nn.rnn(self.cell, inputs, initial_state=self.initial_state)
+    def loop(prev, _):
+        prev = tf.matmul(prev, softmax_w) + softmax_b
+        prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
+        return tf.nn.embedding_lookup(self.embedding, prev_symbol)
+
+    outputs, last_state = seq2seq.rnn_decoder(inputs, self.initial_state, cell, loop_function=loop if infer else None, scope='rnnlm')
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
