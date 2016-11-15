@@ -16,7 +16,8 @@ pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [128]")
+flags.DEFINE_integer("rnn_size", 128, "The number of unit for rnn [128]")
+flags.DEFINE_integer("embedding_size", 128, "The dimension of char embedding matrix [128]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
@@ -96,13 +97,11 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
 
   return similarity, valid_examples, valid_dataset
 
-def run_epochs(sess, x, y, state, model, is_training=True):
+def run_epochs(sess, x, y, state, fast_weights, model, is_training=True):
   start = time.time()
   feed = {model.input_data: x, model.targets: y}
-
-  for i, (c, h) in enumerate(model.initial_state):
-    feed[c] = state[i].c
-    feed[h] = state[i].h
+  feed[model.initial_state] = state
+  feed[model.initial_fast_weights] = fast_weights
 
   if is_training:
     extra_op = model.train_op
@@ -140,18 +139,18 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size,
+                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.embedding_size,
                               FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size,
+                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.embedding_size,
                               FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
-                               FLAGS.layer_depth, FLAGS.rnn_size,
+                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.embedding_size,
                                1, FLAGS.grad_clip, FLAGS.keep_prob,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 
@@ -188,6 +187,7 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         state = sess.run(train_model.initial_state)
+        fast_weights = sess.run(train_model.initial_fast_weights)
         train_iters = 0
         valid_iters = 0
         train_costs = 0
@@ -196,20 +196,21 @@ def main(_):
         # iterate by batch
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
-          res, time_batch = run_epochs(sess, x, y, state, train_model)
+          res, time_batch = run_epochs(sess, x, y, state, fast_weights, train_model)
           train_cost = res["cost"]
-          state = res["final_state"]
+          state, fast_weights = res["final_state"]
           train_iters += FLAGS.seq_length
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = sess.run(valid_model.initial_state)
+            valid_fast_weights = sess.run(valid_model.initial_fast_weights)
 
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
-                                                 valid_state, valid_model, False)
-              valid_state = res["final_state"]
+                                                 valid_state, valid_fast_weights, valid_model, False)
+              valid_state, valid_fast_weights = res["final_state"]
               valid_iters += FLAGS.seq_length
               valid_costs += res["cost"]
               valid_perplexity = np.exp(valid_costs / valid_iters)
