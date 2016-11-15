@@ -40,7 +40,7 @@ class CharRNN(Model):
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.5, 0.5))
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.04, 0.04))
         inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
