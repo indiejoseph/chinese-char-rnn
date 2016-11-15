@@ -50,7 +50,7 @@ class CharRNN(Model):
         prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
         return tf.nn.embedding_lookup(self.embedding, prev_symbol)
 
-    outputs, last_state = seq2seq.rnn_decoder(inputs, self.initial_state, cell, loop_function=loop if infer else None, scope='rnnlm')
+    outputs, last_state = seq2seq.rnn_decoder(inputs, self.initial_state, self.cell, loop_function=loop if infer else None, scope='rnnlm')
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
