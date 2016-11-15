@@ -109,7 +109,11 @@ def run_epochs(sess, x, y, state, model, is_training=True):
   else:
     extra_op = tf.no_op()
 
-  fetchs = [model.final_state, model.cost, extra_op]
+  fetchs = {
+    "final_state": model.final_state
+    "cost": model.cost
+    "extra_op": extra_op
+  }
 
   res = sess.run(fetchs, feed)
   end = time.time()
@@ -193,8 +197,8 @@ def main(_):
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, state, train_model)
-          train_cost = res[1]
-          state = res[0]
+          train_cost = res["cost"]
+          state = res["final_state"]
           train_iters += FLAGS.seq_length
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
@@ -205,9 +209,9 @@ def main(_):
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
-              valid_state = res[0]
+              valid_state = res["final_state"]
               valid_iters += FLAGS.seq_length
-              valid_costs += res[1]
+              valid_costs += res["cost"]
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
             valid_writer.add_summary(tf.scalar_summary("valid_perplexity", valid_perplexity).eval(), current_step)

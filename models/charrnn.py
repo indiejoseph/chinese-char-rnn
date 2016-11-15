@@ -35,7 +35,7 @@ class CharRNN(Model):
     self.initial_state = self.cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope('rnnlm'):
-      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size])
+      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       with tf.device("/cpu:0"):
@@ -46,7 +46,7 @@ class CharRNN(Model):
 
     outputs, last_state = tf.nn.rnn(self.cell, inputs, initial_state=self.initial_state)
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
-    self.logits = tf.matmul(output, softmax_w, transpose_b=True) + softmax_b
+    self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
     labels = tf.reshape(self.targets, [-1])
     loss = tf.nn.seq2seq.sequence_loss_by_example(
