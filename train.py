@@ -41,9 +41,8 @@ def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1
     x = np.zeros((1, 1))
     x[0, 0] = vocab[char]
     feed = {model.input_data: x}
-    c, h = model.initial_state
-    feed[c] = state[0]
-    feed[h] = state[1]
+    for i, s in enumerate(model.initial_state):
+      feed[s] = state[i]
     [state] = sess.run([model.final_state], feed)
 
   def weighted_pick(weights):
@@ -100,9 +99,8 @@ def run_epochs(sess, x, y, state, model, is_training=True):
   start = time.time()
   feed = {model.input_data: x, model.targets: y}
 
-  c, h = model.initial_state
-  feed[c] = state[0]
-  feed[h] = state[1]
+  for i, s in enumerate(model.initial_state):
+    feed[s] = state[i]
 
   if is_training:
     extra_op = model.train_op
