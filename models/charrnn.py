@@ -36,7 +36,9 @@ class CharRNN(Model):
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size],
-                                         initializer=tf.truncated_normal_initializer(stddev=0.02))
+                                         initializer=tf.truncated_normal_initializer(
+                                           stddev=float(1.0 / np.sqrt(rnn_size))
+                                         ))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
         if not infer and keep_prob < 1:
           inputs = tf.nn.dropout(inputs, keep_prob)
