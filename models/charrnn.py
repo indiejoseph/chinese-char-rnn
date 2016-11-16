@@ -25,10 +25,6 @@ class CharRNN(Model):
     self.keep_prob = keep_prob
 
     self.cell = cell = rnn_cell.BasicLSTMCell(rnn_size, forget_bias=0.0, state_is_tuple=True)
-
-    if not infer and keep_prob < 1:
-      self.cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
-
     self.cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
@@ -39,9 +35,12 @@ class CharRNN(Model):
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.5, 0.5))
-        inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
+        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size],
+                                         initializer=tf.truncated_normal_initializer(stddev=0.02))
+        inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+        if not infer and keep_prob < 1:
+          inputs = tf.nn.dropout(inputs, keep_prob)
+        inputs = tf.split(1, seq_length, inputs)
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
     outputs, last_state = tf.nn.rnn(self.cell, inputs, initial_state=self.initial_state)
@@ -49,18 +48,15 @@ class CharRNN(Model):
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
     labels = tf.reshape(self.targets, [-1])
-    loss = tf.nn.seq2seq.sequence_loss_by_example(
-      [self.logits], [labels],
-      [tf.ones([batch_size * seq_length])],
-      vocab_size)
-    self.cost = tf.reduce_sum(loss) / batch_size
+    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, labels)
+    self.cost = tf.reduce_mean(loss)
     self.final_state = last_state
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
     tvars = tf.trainable_variables()
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
-    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+    optimizer = tf.train.AdamOptimizer(self.learning_rate)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
 
