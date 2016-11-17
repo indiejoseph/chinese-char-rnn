@@ -44,22 +44,23 @@ class CharRNN(Model):
                                            stddev=float(1.0 / np.sqrt(rnn_size))
                                          ))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
-        if not infer and keep_prob < 1:
-          inputs = tf.nn.dropout(inputs, keep_prob)
-        inputs = tf.split(1, seq_length, inputs)
-        inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
-    outputs, last_state = tf.nn.rnn(self.cell, inputs, initial_state=self.initial_state)
+    outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
+                                                    inputs,
+                                                    time_major=False,
+                                                    swap_memory=True,
+                                                    initial_state=self.initial_state,
+                                                    dtype=tf.float32)
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
     labels = tf.reshape(self.targets, [-1])
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, labels)
     self.cost = tf.reduce_mean(loss)
-    self.final_state = last_state
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
+
     tvars = tf.trainable_variables()
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     optimizer = tf.train.AdamOptimizer(self.learning_rate)
