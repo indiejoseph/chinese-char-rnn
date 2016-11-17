@@ -27,7 +27,7 @@ class CharRNN(Model):
     self.cell = cell = rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
 
     if not infer and keep_prob < 1:
-      self.cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
+      self.cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
     self.cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
@@ -40,7 +40,10 @@ class CharRNN(Model):
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
+                                         [vocab_size, rnn_size],
+                                         initializer=tf.truncated_normal_initializer(
+                                           stddev=float(1.0 / np.sqrt(rnn_size))
+                                         )
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
@@ -52,6 +55,7 @@ class CharRNN(Model):
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
+
     labels = tf.reshape(self.targets, [-1])
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, labels)
     self.cost = tf.reduce_mean(loss)
