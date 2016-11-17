@@ -20,7 +20,7 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", .2, "Learning rate [.2]")
+flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
