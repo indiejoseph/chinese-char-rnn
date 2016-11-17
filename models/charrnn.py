@@ -39,10 +39,9 @@ class CharRNN(Model):
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size],
-                                         initializer=tf.truncated_normal_initializer(
-                                           stddev=float(1.0 / np.sqrt(rnn_size))
-                                         ))
+        self.embedding = tf.get_variable("embedding",
+                                         [vocab_size, rnn_size],
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
