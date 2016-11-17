@@ -43,7 +43,7 @@ class CharRNN(Model):
                                          [vocab_size, rnn_size],
                                          initializer=tf.truncated_normal_initializer(
                                            stddev=float(1.0 / np.sqrt(rnn_size))
-                                         )
+                                         ))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
