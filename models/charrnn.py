@@ -57,8 +57,8 @@ class CharRNN(Model):
     self.probs = tf.nn.softmax(self.logits)
 
     labels = tf.reshape(self.targets, [-1])
-    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, labels)
-    self.cost = tf.reduce_mean(loss)
+    self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, labels)
+    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
