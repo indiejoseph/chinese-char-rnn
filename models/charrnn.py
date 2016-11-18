@@ -47,18 +47,18 @@ class CharRNN(Model):
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
-                                                    inputs,
-                                                    time_major=False,
-                                                    swap_memory=True,
-                                                    initial_state=self.initial_state,
-                                                    dtype=tf.float32)
+                                                  inputs,
+                                                  time_major=False,
+                                                  swap_memory=True,
+                                                  initial_state=self.initial_state,
+                                                  dtype=tf.float32)
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
 
     labels = tf.reshape(self.targets, [-1])
     self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, labels)
-    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
+    self.cost = tf.reduce_mean(self.loss)
 
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.learning_rate = tf.Variable(0.0, trainable=False)
