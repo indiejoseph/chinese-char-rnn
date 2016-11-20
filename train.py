@@ -21,7 +21,7 @@ flags.DEFINE_string("dialations", "1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1
 flags.DEFINE_integer("filter_width", 3, "Filter width for conv")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
+flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_integer("test_every", 1000, "Validate every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
