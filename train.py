@@ -133,20 +133,20 @@ def main(_):
         train_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
                               FLAGS.dialations, FLAGS.dialations,
-                              FLAGS.grad_clip, True,
+                              FLAGS.grad_clip,
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         test_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
                               FLAGS.dialations, FLAGS.dialations,
-                              FLAGS.grad_clip, False,
+                              FLAGS.grad_clip,
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       with tf.name_scope('sample'):
         simple_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, 1,
                                FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
                                FLAGS.dialations, FLAGS.dialations,
-                               FLAGS.grad_clip, False,
+                               FLAGS.grad_clip,
                                checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
