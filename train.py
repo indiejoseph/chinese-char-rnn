@@ -25,7 +25,7 @@ flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
-flags.DEFINE_integer("valid_every", 1000, "Validate every")
+flags.DEFINE_integer("test_every", 1000, "Validate every")
 flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -76,23 +76,23 @@ def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1
   return ret
 
 
-def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
+def compute_similarity(model, test_size=16, test_window=100, offset=0):
   # We pick a random validation set to sample nearest neighbors. Here we limit the
   # validation samples to the characters that have a low numeric ID, which by
   # construction are also the most frequent.
-  # valid_size: Random set of characters to evaluate similarity on.
-  # valid_size: Only pick dev samples in the head of the distribution.
-  valid_examples = np.random.choice(range(offset, offset + valid_window), valid_size, replace=False)
-  valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
+  # test_size: Random set of characters to evaluate similarity on.
+  # test_size: Only pick dev samples in the head of the distribution.
+  test_examples = np.random.choice(range(offset, offset + test_window), test_size, replace=False)
+  test_dataset = tf.constant(test_examples, dtype=tf.int32)
 
   # Compute the cosine similarity between minibatch examples and all embeddings.
   norm = tf.sqrt(tf.reduce_sum(tf.square(model.w_source_embedding), 1, keep_dims=True))
   normalized_embeddings = model.w_source_embedding / norm
-  valid_embeddings = tf.nn.embedding_lookup(normalized_embeddings,
-                                            valid_dataset)
-  similarity = tf.matmul(valid_embeddings, normalized_embeddings, transpose_b=True)
+  test_embeddings = tf.nn.embedding_lookup(normalized_embeddings,
+                                            test_dataset)
+  similarity = tf.matmul(test_embeddings, normalized_embeddings, transpose_b=True)
 
-  return similarity, valid_examples, valid_dataset
+  return similarity, test_examples, test_dataset
 
 def run_epochs(sess, x, y, model, is_training=True):
   start = time.time()
@@ -124,8 +124,8 @@ def main(_):
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
   graph = tf.Graph()
-  valid_size = 50
-  valid_window = 100
+  test_size = 50
+  test_window = 100
 
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
@@ -139,7 +139,7 @@ def main(_):
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
-        valid_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
+        test_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
                               FLAGS.dialations, FLAGS.dialations,
                               FLAGS.grad_clip,
@@ -152,7 +152,7 @@ def main(_):
                                checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
-    valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
+    test_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
     tf.initialize_all_variables().run()
 
     if FLAGS.sample:
@@ -175,7 +175,7 @@ def main(_):
 
     else: # Train
       current_step = 0
-      similarity, valid_examples, _ = compute_similarity(train_model, valid_size, valid_window, 6)
+      similarity, test_examples, _ = compute_similarity(train_model, test_size, test_window, 6)
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
@@ -184,32 +184,32 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         train_iters = 0
-        valid_iters = 0
+        test_iters = 0
         train_costs = 0
-        valid_costs = 0
+        test_costs = 0
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, train_model)
           train_cost = res["cost"]
-          train_iters += 1
+          train_iters += FLAGS.seq_length
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
-          if current_step % FLAGS.valid_every == 0:
-            for vb in xrange(data_loader.num_valid_batches):
-              res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
-                                                 valid_model, False)
-              valid_iters += 1
-              valid_costs += res["cost"]
-              valid_perplexity = np.exp(valid_costs / valid_iters)
+          if current_step % FLAGS.test_every == 0:
+            for vb in xrange(data_loader.num_test_batches):
+              res, test_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
+                                                 test_model, False)
+              test_iters += FLAGS.seq_length
+              test_costs += res["cost"]
+              test_perplexity = np.exp(test_costs / test_iters)
 
-            valid_writer.add_summary(tf.scalar_summary("valid_perplexity", valid_perplexity).eval(), current_step)
-            valid_writer.flush()
+            test_writer.add_summary(tf.scalar_summary("test_perplexity", test_perplexity).eval(), current_step)
+            test_writer.flush()
 
-            print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
-              .format(valid_perplexity, valid_time_batch)
+            print "### test_perplexity = {:.2f}, time/batch = {:.2f}" \
+              .format(test_perplexity, test_time_batch)
 
             # write summary
             train_writer.add_summary(tf.scalar_summary("train_perplexity", train_perplexity).eval(), current_step)
@@ -219,11 +219,11 @@ def main(_):
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
             log_str = ""
             sim = similarity.eval()
-            for i in xrange(valid_size):
-              valid_word = data_loader.chars[valid_examples[i]]
+            for i in xrange(test_size):
+              test_word = data_loader.chars[test_examples[i]]
               top_k = 8 # number of nearest neighbors
               nearest = (-sim[i, :]).argsort()[1:top_k+1]
-              log_str = log_str + "Nearest to %s:" % valid_word
+              log_str = log_str + "Nearest to %s:" % test_word
               for k in xrange(top_k):
                 close_word = data_loader.chars[nearest[k]]
                 log_str = "%s %s," % (log_str, close_word)
@@ -235,15 +235,15 @@ def main(_):
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}) cost = {:.2f} train_perplexity = {:.2f} last_valid = {:.2f} time/batch = {:.2f}" \
+          print "{}/{} (epoch {}) cost = {:.2f} train = {:.2f} test = {:.2f} time/batch = {:.2f}" \
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, train_perplexity, valid_perplexity, time_batch)
+                      e, train_cost, train_perplexity, test_perplexity, time_batch)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
 
-      train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-      print "model saved to {}".format(FLAGS.checkpoint_dir)
+        train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
+        print "model saved to {}".format(FLAGS.checkpoint_dir)
 
 
 if __name__ == '__main__':
