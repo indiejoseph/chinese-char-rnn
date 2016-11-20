@@ -10,7 +10,7 @@ class ByteNet(Model):
     encoder_filter_width=3, decoder_filter_width=3,
     encoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
     decoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
-    grad_clip=5., checkpoint_dir="checkpoint", dataset_name="wiki"
+    grad_clip=5., checkpoint_dir="checkpoint", dataset_name="wiki", use_batch_norm=False
   ):
     """
     n_source_quant : quantization channels of source text
@@ -37,6 +37,7 @@ class ByteNet(Model):
     self.grad_clip = grad_clip
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
+    self.use_batch_norm = use_batch_norm
 
     self.w_source_embedding = tf.get_variable("w_source_embedding",
       initializer=tf.random_uniform([self.n_source_quant, 2*self.residual_channels], -1.0, 1.0)
@@ -131,6 +132,9 @@ class ByteNet(Model):
     curr_input = input_
     for layer_no, dilation in enumerate(self.self.encoder_dilations):
       layer_output = self.encode_layer(curr_input, dilation, layer_no)
+
+      if self.use_batch_norm:
+        layer_output = f.contrib.layers.batch_norm(layer_output)
 
       # ENCODE ONLY TILL THE INPUT LENGTH, conditioning should be 0 beyond that
       layer_output = tf.mul(layer_output, self.source_masked, name="layer_{}_output".format(layer_no))
