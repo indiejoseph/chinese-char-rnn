@@ -104,6 +104,10 @@ class ByteNet(Model):
 
     for layer_no, dilation in enumerate(self.decoder_dilations):
       layer_output = self.decode_layer(curr_input, dilation, layer_no)
+
+      if self.use_batch_norm:
+        layer_output = tf.contrib.layers.batch_norm(layer_output)
+
       curr_input = layer_output
 
 
