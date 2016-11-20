@@ -134,7 +134,7 @@ class ByteNet(Model):
       layer_output = self.encode_layer(curr_input, dilation, layer_no)
 
       if self.use_batch_norm:
-        layer_output = f.contrib.layers.batch_norm(layer_output)
+        layer_output = tf.contrib.layers.batch_norm(layer_output)
 
       # ENCODE ONLY TILL THE INPUT LENGTH, conditioning should be 0 beyond that
       layer_output = tf.mul(layer_output, self.source_masked, name="layer_{}_output".format(layer_no))
