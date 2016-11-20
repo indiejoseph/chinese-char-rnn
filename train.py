@@ -9,7 +9,7 @@ import cPickle
 import pprint
 import string
 import sys
-from models.charrnn import CharRNN
+from models.bytenet import ByteNet
 from utils import TextLoader, normalize_unicodes
 
 pp = pprint.PrettyPrinter()
@@ -17,10 +17,12 @@ pp = pprint.PrettyPrinter()
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
 flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [128]")
-flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
+flags.DEFINE_integer("residual_channels", 256, "Residual channels")
+flags.DEFINE_string("dialations", "1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16", "Dialations")
+flags.DEFINE_integer("filter_width", 3, "Filter width for conv")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
+flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
@@ -34,17 +36,13 @@ flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
 
 def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1):
-  state = sess.run(model.cell.zero_state(1, tf.float32))
   prime = prime.decode('utf-8')
 
   for char in prime[:-1]:
     x = np.zeros((1, 1))
     x[0, 0] = vocab[char]
-    feed = {model.input_data: x}
-    for i, (c, h) in enumerate(model.initial_state):
-      feed[c] = state[i].c
-      feed[h] = state[i].h
-    [state] = sess.run([model.final_state], feed)
+    feed = {model.sentence: x}
+    _ = sess.run([], feed)
 
   def weighted_pick(weights):
     t = np.cumsum(weights)
@@ -57,8 +55,8 @@ def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1
   for _ in xrange(num):
     x = np.zeros((1, 1))
     x[0, 0] = vocab.get(char, 0)
-    feed = {model.input_data: x, model.initial_state:state}
-    [probs, state] = sess.run([model.probs, model.final_state], feed)
+    feed = {model.sentence: x}
+    [probs] = sess.run([model.probs], feed)
     p = probs[0]
 
     if sampling_type == 0:
@@ -88,21 +86,17 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
   valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
 
   # Compute the cosine similarity between minibatch examples and all embeddings.
-  norm = tf.sqrt(tf.reduce_sum(tf.square(model.embedding), 1, keep_dims=True))
-  normalized_embeddings = model.embedding / norm
+  norm = tf.sqrt(tf.reduce_sum(tf.square(model.w_source_embedding), 1, keep_dims=True))
+  normalized_embeddings = model.w_source_embedding / norm
   valid_embeddings = tf.nn.embedding_lookup(normalized_embeddings,
                                             valid_dataset)
   similarity = tf.matmul(valid_embeddings, normalized_embeddings, transpose_b=True)
 
   return similarity, valid_examples, valid_dataset
 
-def run_epochs(sess, x, y, state, model, is_training=True):
+def run_epochs(sess, x, y, model, is_training=True):
   start = time.time()
-  feed = {model.input_data: x, model.targets: y}
-
-  for i, (c, h) in enumerate(model.initial_state):
-    feed[c] = state[i].c
-    feed[h] = state[i].h
+  feed = {model.sentence: x, model.targets: y}
 
   if is_training:
     extra_op = model.train_op
@@ -110,7 +104,6 @@ def run_epochs(sess, x, y, state, model, is_training=True):
     extra_op = tf.no_op()
 
   fetchs = {
-    "final_state": model.final_state,
     "cost": model.cost,
     "extra_op": extra_op
   }
@@ -139,21 +132,24 @@ def main(_):
 
     with graph.as_default():
       with tf.name_scope('training'):
-        train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size,
-                              FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
-                              FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
+        train_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
+                              FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
+                              FLAGS.dialations, FLAGS.dialations,
+                              FLAGS.grad_clip,
+                              checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
-        valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size,
-                              FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
-                              FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+        valid_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
+                              FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
+                              FLAGS.dialations, FLAGS.dialations,
+                              FLAGS.grad_clip,
+                              checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       with tf.name_scope('sample'):
-        simple_model = CharRNN(vocab_size, 1,
-                               FLAGS.layer_depth, FLAGS.rnn_size,
-                               1, FLAGS.grad_clip, FLAGS.keep_prob,
-                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+        simple_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, 1,
+                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
+                               FLAGS.dialations, FLAGS.dialations,
+                               FLAGS.grad_clip,
+                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
@@ -172,7 +168,7 @@ def main(_):
 
     elif FLAGS.export:
       print "Eval..."
-      final_embeddings = train_model.embedding.eval(sess)
+      final_embeddings = train_model.w_source_embedding.eval(sess)
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
       print "Embedding shape: {}".format(final_embeddings.shape)
       np.save(emb_file, final_embeddings)
@@ -187,7 +183,6 @@ def main(_):
 
         data_loader.reset_batch_pointer()
 
-        state = sess.run(train_model.initial_state)
         train_iters = 0
         valid_iters = 0
         train_costs = 0
@@ -196,20 +191,16 @@ def main(_):
         # iterate by batch
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
-          res, time_batch = run_epochs(sess, x, y, state, train_model)
+          res, time_batch = run_epochs(sess, x, y, train_model)
           train_cost = res["cost"]
-          state = res["final_state"]
           train_iters += 1
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
           if current_step % FLAGS.valid_every == 0:
-            valid_state = sess.run(valid_model.initial_state)
-
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
-                                                 valid_state, valid_model, False)
-              valid_state = res["final_state"]
+                                                 valid_model, False)
               valid_iters += 1
               valid_costs += res["cost"]
               valid_perplexity = np.exp(valid_costs / valid_iters)
