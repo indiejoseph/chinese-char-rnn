@@ -193,7 +193,7 @@ def main(_):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, train_model)
           train_cost = res["cost"]
-          train_iters += FLAGS.seq_length
+          train_iters += 1
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
@@ -201,7 +201,7 @@ def main(_):
             for vb in xrange(data_loader.num_test_batches):
               res, test_time_batch = run_epochs(sess, data_loader.x_test[vb], data_loader.y_test[vb],
                                                  test_model, False)
-              test_iters += FLAGS.seq_length
+              test_iters += 1
               test_costs += res["cost"]
               test_perplexity = np.exp(test_costs / test_iters)
 
