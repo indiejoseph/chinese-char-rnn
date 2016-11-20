@@ -10,7 +10,7 @@ class ByteNet(Model):
     encoder_filter_width=3, decoder_filter_width=3,
     encoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
     decoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
-    grad_clip=5., checkpoint_dir="checkpoint", dataset_name="wiki", use_batch_norm=False
+    grad_clip=5., use_batch_norm=False, checkpoint_dir="checkpoint", dataset_name="wiki"
   ):
     """
     n_source_quant : quantization channels of source text
