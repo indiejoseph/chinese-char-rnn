@@ -16,7 +16,6 @@ pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [128]")
 flags.DEFINE_integer("residual_channels", 256, "Residual channels")
 flags.DEFINE_string("dialations", "1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16", "Dialations")
 flags.DEFINE_integer("filter_width", 3, "Filter width for conv")
@@ -193,7 +192,7 @@ def main(_):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, train_model)
           train_cost = res["cost"]
-          train_iters += 1
+          train_iters += FLAGS.seq_length
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
@@ -201,7 +200,7 @@ def main(_):
             for vb in xrange(data_loader.num_test_batches):
               res, test_time_batch = run_epochs(sess, data_loader.x_test[vb], data_loader.y_test[vb],
                                                  test_model, False)
-              test_iters += 1
+              test_iters += FLAGS.seq_length
               test_costs += res["cost"]
               test_perplexity = np.exp(test_costs / test_iters)
 
