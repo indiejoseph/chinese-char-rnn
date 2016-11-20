@@ -199,7 +199,7 @@ def main(_):
 
           if current_step % FLAGS.test_every == 0:
             for vb in xrange(data_loader.num_test_batches):
-              res, test_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
+              res, test_time_batch = run_epochs(sess, data_loader.x_test[vb], data_loader.y_test[vb],
                                                  test_model, False)
               test_iters += FLAGS.seq_length
               test_costs += res["cost"]

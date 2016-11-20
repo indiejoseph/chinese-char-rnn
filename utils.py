@@ -84,24 +84,24 @@ class TextLoader():
     vocab_file = os.path.join(data_dir, "vocab.pkl")
     tensor_file = os.path.join(data_dir, "data.npy")
     vdata_file = os.path.join(data_dir, "valid.npy")
-    valid_file = os.path.join(data_dir, "valid.txt")
+    test_file = os.path.join(data_dir, "valid.txt")
 
     if not (os.path.exists(vocab_file) and os.path.exists(tensor_file)):
       print "reading text file"
-      self.preprocess(input_file, vocab_file, tensor_file, vdata_file, valid_file)
+      self.preprocess(input_file, vocab_file, tensor_file, vdata_file, test_file)
     else:
       print "loading preprocessed files"
       self.load_preprocessed(vocab_file, tensor_file, vdata_file)
     self.create_batches()
     self.reset_batch_pointer()
 
-  def preprocess(self, input_file, vocab_file, tensor_file, vdata_file, valid_file):
+  def preprocess(self, input_file, vocab_file, tensor_file, vdata_file, test_file):
     with codecs.open(input_file, "r", encoding=self.encoding) as f:
       train_data = f.read()
       train_data = normalize_unicodes(train_data)
-    with codecs.open(valid_file, "r", encoding=self.encoding) as f:
-      valid_data = f.read()
-      valid_data = normalize_unicodes(valid_data)
+    with codecs.open(test_file, "r", encoding=self.encoding) as f:
+      test_data = f.read()
+      test_data = normalize_unicodes(test_data)
     counter = collections.Counter(train_data)
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
     self.chars, counts = zip(*count_pairs)
@@ -113,9 +113,9 @@ class TextLoader():
       cPickle.dump(self.chars, f)
     unk_index = START_VOCAB.index(UNK)
     self.tensor = np.array([self.vocab.get(c, unk_index) for c in train_data], dtype=np.int64)
-    self.valid = np.array([self.vocab.get(c, unk_index) for c in valid_data], dtype=np.int64)
+    self.test = np.array([self.vocab.get(c, unk_index) for c in test_data], dtype=np.int64)
     np.save(tensor_file, self.tensor)
-    np.save(vdata_file, self.valid)
+    np.save(vdata_file, self.test)
 
   def load_preprocessed(self, vocab_file, tensor_file, vdata_file):
     with open(vocab_file, 'rb') as f:
@@ -123,14 +123,14 @@ class TextLoader():
     self.vocab_size = len(self.chars)
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
     self.tensor = np.load(tensor_file)
-    self.valid = np.load(vdata_file)
+    self.test = np.load(vdata_file)
     self.num_batches = int(self.tensor.size / (self.batch_size *
                            self.seq_length))
 
   def create_batches(self):
     self.num_batches = int(self.tensor.size / (self.batch_size *
                            self.seq_length))
-    self.num_valid_batches = int(self.valid.size / (self.batch_size *
+    self.num_test_batches = int(self.test.size / (self.batch_size *
                            self.seq_length))
 
     # When the data (tensor) is too small, let's give them a better error message
@@ -138,17 +138,17 @@ class TextLoader():
       assert False, "Not enough data. Make seq_length and batch_size small."
 
     self.tensor = self.tensor[:self.num_batches * self.batch_size * self.seq_length]
-    self.valid = self.valid[:self.num_valid_batches * self.batch_size * self.seq_length]
+    self.test = self.test[:self.num_test_batches * self.batch_size * self.seq_length]
     xdata = self.tensor
     ydata = np.copy(self.tensor)
     ydata[:-1] = xdata[1:]
     ydata[-1] = xdata[0]
-    x_valid = self.valid
-    y_valid = np.copy(self.valid)
-    y_valid[:-1] = x_valid[1:]
-    y_valid[-1] = x_valid[0]
-    self.x_valid = np.split(x_valid.reshape(self.batch_size, -1), self.num_valid_batches, 1)
-    self.y_valid = np.split(y_valid.reshape(self.batch_size, -1), self.num_valid_batches, 1)
+    x_test = self.test
+    y_test = np.copy(self.test)
+    y_test[:-1] = x_test[1:]
+    y_test[-1] = x_test[0]
+    self.x_test = np.split(x_test.reshape(self.batch_size, -1), self.num_test_batches, 1)
+    self.y_test = np.split(y_test.reshape(self.batch_size, -1), self.num_test_batches, 1)
     self.x_batches = np.split(xdata.reshape(self.batch_size, -1), self.num_batches, 1)
     self.y_batches = np.split(ydata.reshape(self.batch_size, -1), self.num_batches, 1)
 
