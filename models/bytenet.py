@@ -57,12 +57,8 @@ class ByteNet(Model):
     decoder_output = self.decoder(source_embedding)
 
     # Loss
-    target_one_hot = tf.one_hot(self.targets,
-      depth = self.n_target_quant,
-      dtype = tf.float32)
-
-    self.logits = tf.reshape( decoder_output, [-1, self.n_target_quant])
-    flat_targets = tf.reshape( target_one_hot, [-1, self.n_target_quant])
+    self.logits = tf.reshape(decoder_output, [-1, self.n_target_quant])
+    flat_targets = tf.reshape(self.targets, [-1, self.n_target_quant])
     self.loss = tf.nn.softmax_cross_entropy_with_logits(self.logits, flat_targets, name="decoder_cross_entropy_loss")
     self.cost = tf.reduce_sum(self.loss) / self.batch_size / self.seq_length
 
