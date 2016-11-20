@@ -51,7 +51,8 @@ class ByteNet(Model):
     self.sentence = tf.placeholder("int32", [self.batch_size, self.seq_length], name="sentence")
     self.targets = tf.placeholder("int32", [self.batch_size, self.seq_length], name="sentence")
 
-    source_embedding = tf.nn.embedding_lookup(self.w_source_embedding, self.sentence, name="source_embedding")
+    with tf.device('/cpu:0'):
+      source_embedding = tf.nn.embedding_lookup(self.w_source_embedding, self.sentence, name="source_embedding")
 
     decoder_output = self.decoder(source_embedding)
 
