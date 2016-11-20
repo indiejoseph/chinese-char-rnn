@@ -39,18 +39,12 @@ class ByteNet(Model):
     self.dataset_name = dataset_name
 
     self.w_source_embedding = tf.get_variable("w_source_embedding",
-      [self.n_source_quant, 2*self.residual_channels],
-      initializer=tf.truncated_normal_initializer(
-        stddev=float(1.0 / np.sqrt(2*self.residual_channels))
-      )
+      initializer=tf.random_uniform([self.n_source_quant, 2*self.residual_channels], -1.0, 1.0)
     )
 
     # TO BE CONCATENATED WITH THE ENCODER EMBEDDING
     self.w_target_embedding = tf.get_variable("w_target_embedding",
-      [self.n_target_quant, self.residual_channels],
-      initializer=tf.truncated_normal_initializer(
-        stddev=float(1.0 / np.sqrt(self.residual_channels))
-      )
+      initializer=tf.random_uniform([self.n_target_quant, self.residual_channels], -1.0, 1.0)
     )
 
     self.sentence = tf.placeholder("int32", [self.batch_size, self.seq_length], name="sentence")
@@ -65,14 +59,13 @@ class ByteNet(Model):
       depth = self.n_target_quant,
       dtype = tf.float32)
 
-    flat_logits = tf.reshape( decoder_output, [-1, self.n_target_quant])
+    self.logits = tf.reshape( decoder_output, [-1, self.n_target_quant])
     flat_targets = tf.reshape( target_one_hot, [-1, self.n_target_quant])
-    self.loss = tf.nn.softmax_cross_entropy_with_logits(flat_logits, flat_targets, name="decoder_cross_entropy_loss")
+    self.loss = tf.nn.softmax_cross_entropy_with_logits(self.logits, flat_targets, name="decoder_cross_entropy_loss")
     self.cost = tf.reduce_sum(self.loss) / self.batch_size / self.seq_length
 
     tf.scalar_summary("LOSS", self.loss)
 
-    self.logits = tf.reshape( decoder_output, [-1, self.n_target_quant])
     self.prediction = tf.argmax(self.logits, 1)
     self.probs = tf.nn.softmax(self.logits)
 
