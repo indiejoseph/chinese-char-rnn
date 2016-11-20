@@ -54,18 +54,16 @@ class ByteNet(Model):
     with tf.device('/cpu:0'):
       source_embedding = tf.nn.embedding_lookup(self.w_source_embedding, self.sentence, name="source_embedding")
 
-    decoder_output = self.decoder(source_embedding)
+    outputs = self.decoder(source_embedding)
 
     # Loss
-    self.logits = tf.reshape(decoder_output, [-1, self.n_target_quant])
-    flat_targets = tf.reshape(self.targets, [-1, self.n_target_quant])
-    self.loss = tf.nn.softmax_cross_entropy_with_logits(self.logits, flat_targets, name="decoder_cross_entropy_loss")
-    self.cost = tf.reduce_sum(self.loss) / self.batch_size / self.seq_length
-
-    tf.scalar_summary("LOSS", self.loss)
-
+    self.logits = tf.reshape(outputs, [-1, self.n_target_quant])
     self.prediction = tf.argmax(self.logits, 1)
     self.probs = tf.nn.softmax(self.logits)
+
+    labels = tf.reshape(self.targets, [-1])
+    self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, labels)
+    self.cost = tf.reduce_mean(self.loss)
 
     self.learning_rate = tf.Variable(0.0, trainable=False)
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -154,4 +152,3 @@ class ByteNet(Model):
 
 if __name__ == "__main__":
   model = ByteNet()
-  print model.build_prediction_model()
