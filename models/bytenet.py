@@ -102,10 +102,12 @@ class ByteNet(Model):
       layer_output = self.decode_layer(curr_input, dilation, layer_no)
       curr_input = layer_output
 
+    layer_output = tf.nn.relu(layer_output)
+
     if self.keep_prob < 1:
       layer_output = tf.nn.dropout(layer_output, self.keep_prob)
 
-    processed_output = ops.conv1d(tf.nn.relu(layer_output),
+    processed_output = ops.conv1d(layer_output,
       self.n_target_quant,
       name="decoder_post_processing")
 
