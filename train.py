@@ -191,8 +191,9 @@ def main(_):
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, train_model)
+          train_cost = res["cost"]
           train_iters += 1
-          train_costs += res["cost"]
+          train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
           if current_step % FLAGS.test_every == 0:
