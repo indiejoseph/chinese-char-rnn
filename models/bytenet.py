@@ -42,12 +42,12 @@ class ByteNet(Model):
     self.keep_prob = keep_prob
 
     self.w_source_embedding = tf.get_variable("w_source_embedding",
-      initializer=tf.random_uniform([self.n_source_quant, 2*self.residual_channels], -1.0, 1.0)
+      initializer=tf.random_uniform([self.n_source_quant, 2*self.residual_channels], -0.1, 0.1)
     )
 
     # TO BE CONCATENATED WITH THE ENCODER EMBEDDING
     self.w_target_embedding = tf.get_variable("w_target_embedding",
-      initializer=tf.random_uniform([self.n_target_quant, self.residual_channels], -1.0, 1.0)
+      initializer=tf.random_uniform([self.n_target_quant, self.residual_channels], -0.1, 0.1)
     )
 
     self.sentence = tf.placeholder("int32", [self.batch_size, self.seq_length], name="sentence")
