@@ -10,8 +10,7 @@ class ByteNet(Model):
     encoder_filter_width=3, decoder_filter_width=3,
     encoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
     decoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
-    keep_prob=.5, grad_clip=5.,
-    use_batch_norm=False, checkpoint_dir="checkpoint", dataset_name="wiki"
+    grad_clip=5., use_batch_norm=False, checkpoint_dir="checkpoint", dataset_name="wiki"
   ):
     """
     n_source_quant : quantization channels of source text
@@ -39,7 +38,6 @@ class ByteNet(Model):
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
     self.use_batch_norm = use_batch_norm
-    self.keep_prob = keep_prob
 
     self.w_source_embedding = tf.get_variable("w_source_embedding",
       initializer=tf.random_uniform([self.n_source_quant, 2*self.residual_channels], -0.1, 0.1)
@@ -103,9 +101,6 @@ class ByteNet(Model):
       curr_input = layer_output
 
     layer_output = tf.nn.relu(layer_output)
-
-    if self.keep_prob < 1:
-      layer_output = tf.nn.dropout(layer_output, self.keep_prob)
 
     processed_output = ops.conv1d(layer_output,
       self.n_target_quant,
