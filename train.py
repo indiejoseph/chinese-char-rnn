@@ -234,10 +234,10 @@ def main(_):
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}) cost = {:.2f} train = {:.2f} test = {:.2f} time/batch = {:.2f}" \
+          print "{}/{} (epoch {}) cost = {:.2f} train = {:.2f} test = {:.2f} time/batch = {:.2f} chars/time = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, train_perplexity, test_perplexity, time_batch)
+                      e, train_cost, train_perplexity, test_perplexity, time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
 
