@@ -94,16 +94,16 @@ def compute_similarity(model, test_size=16, test_window=100, offset=0):
 
 def run_epochs(sess, x, y, model, is_training=True):
   start = time.time()
-  feed = {model.sentence: x, model.targets: y}
+  feed = { model.sentence: x, model.targets: y }
 
   if is_training:
-    extra_op = model.train_op
+    train_op = model.train_op
   else:
-    extra_op = tf.no_op()
+    train_op = tf.no_op()
 
   fetchs = {
     "cost": model.cost,
-    "extra_op": extra_op
+    "train_op": train_op
   }
 
   res = sess.run(fetchs, feed)
@@ -234,7 +234,7 @@ def main(_):
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}) cost = {:.2f} train = {:.2f} test = {:.2f} time/batch = {:.2f} chars/time = {:.2f}k"\
+          print "{}/{} (epoch {}) cost = {:.2f} train = {:.2f} test = {:.2f} time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
                       e, train_cost, train_perplexity, test_perplexity, time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
