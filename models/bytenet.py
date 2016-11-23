@@ -50,7 +50,7 @@ class ByteNet(Model):
     self.sentence = tf.placeholder("int32", [self.batch_size, self.seq_length], name="sentence")
     self.targets = tf.placeholder("int32", [self.batch_size, self.seq_length], name="sentence")
 
-    with tf.device('/cpu:0'):
+    with tf.device("/cpu:0"):
       source_embedding = tf.nn.embedding_lookup(self.w_source_embedding, self.sentence, name="source_embedding")
 
     outputs = self.decoder(source_embedding)
@@ -69,7 +69,7 @@ class ByteNet(Model):
 
     tvars = tf.trainable_variables()
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), self.grad_clip)
-    optimizer = tf.train.AdamOptimizer(self.learning_rate, beta1=.5)
+    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
   def decode_layer(self, input_, dilation, layer_no):
