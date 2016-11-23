@@ -185,6 +185,7 @@ def main(_):
         test_iters = 0
         train_costs = 0
         test_costs = 0
+        test_cost = 0
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
@@ -234,10 +235,11 @@ def main(_):
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}) cost = {:.2f} train = {:.2f} test = {:.2f} time/batch = {:.2f} chars/sec = {:.2f}k"\
+          print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, train_perplexity, test_perplexity, time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
+                      e, train_cost, test_cost, train_perplexity, test_perplexity,
+                      time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
 
