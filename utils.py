@@ -115,6 +115,7 @@ class TextLoader():
 
     with open(vocab_file, 'wb') as f:
       cPickle.dump(self.chars, f)
+
     unk_index = START_VOCAB.index(UNK)
     self.tensor = np.array([self.vocab.get(c, unk_index) for c in train_data], dtype=np.int64)
     self.test = np.array([self.vocab.get(c, unk_index) for c in test_data], dtype=np.int64)

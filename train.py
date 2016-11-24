@@ -24,7 +24,6 @@ flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_integer("test_every", 1000, "Validate every")
-flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
@@ -133,20 +132,17 @@ def main(_):
         train_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
                               FLAGS.dialations, FLAGS.dialations,
-                              FLAGS.grad_clip,
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         test_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
                               FLAGS.dialations, FLAGS.dialations,
-                              FLAGS.grad_clip,
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       with tf.name_scope('sample'):
         simple_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, 1,
                                FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
                                FLAGS.dialations, FLAGS.dialations,
-                               FLAGS.grad_clip,
                                checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)

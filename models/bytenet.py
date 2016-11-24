@@ -10,7 +10,7 @@ class ByteNet(Model):
     encoder_filter_width=3, decoder_filter_width=3,
     encoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
     decoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
-    grad_clip=5., checkpoint_dir="checkpoint", dataset_name="wiki"
+    checkpoint_dir="checkpoint", dataset_name="wiki"
   ):
     """
     n_source_quant : quantization channels of source text
@@ -34,7 +34,6 @@ class ByteNet(Model):
     self.decoder_filter_width = decoder_filter_width
     self.encoder_dilations = [int(d) for d in encoder_dilations.split(",")]
     self.decoder_dilations = [int(d) for d in decoder_dilations.split(",")]
-    self.grad_clip = grad_clip
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
 
@@ -68,9 +67,7 @@ class ByteNet(Model):
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
     tvars = tf.trainable_variables()
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), self.grad_clip)
-    optimizer = tf.train.AdamOptimizer(self.learning_rate)
-    self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
+    self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cost, var_list=tvars)
 
   def decode_layer(self, input_, dilation, layer_no):
     relu1 = tf.nn.relu(input_, name="dec_relu1_layer{}".format(layer_no))
