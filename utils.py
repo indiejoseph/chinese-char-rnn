@@ -92,6 +92,7 @@ class TextLoader():
     else:
       print "loading preprocessed files"
       self.load_preprocessed(vocab_file, tensor_file, vdata_file)
+
     self.create_batches()
     self.reset_batch_pointer()
 
@@ -99,16 +100,19 @@ class TextLoader():
     with codecs.open(input_file, "r", encoding=self.encoding) as f:
       train_data = f.read()
       train_data = normalize_unicodes(train_data)
+
     with codecs.open(test_file, "r", encoding=self.encoding) as f:
       test_data = f.read()
       test_data = normalize_unicodes(test_data)
+
     counter = collections.Counter(train_data)
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
     self.chars, counts = zip(*count_pairs)
     threshold = 10
-    self.chars = [c for i, c in enumerate(self.chars) if counts[i] > threshold]
+    self.chars = START_VOCAB + [c for i, c in enumerate(self.chars) if counts[i] > threshold and c not in START_VOCAB]
     self.vocab_size = len(self.chars)
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
+
     with open(vocab_file, 'wb') as f:
       cPickle.dump(self.chars, f)
     unk_index = START_VOCAB.index(UNK)
