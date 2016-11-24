@@ -131,18 +131,21 @@ def main(_):
       with tf.name_scope('training'):
         train_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
-                              FLAGS.dialations, FLAGS.dialations,
+                              FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate,
+                              data_loader.batch_size * data_loader.seq_length,
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         test_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
-                              FLAGS.dialations, FLAGS.dialations,
+                              FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate,
+                              data_loader.batch_size * data_loader.seq_length,
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       with tf.name_scope('sample'):
         simple_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, 1,
                                FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
-                               FLAGS.dialations, FLAGS.dialations,
+                               FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate,
+                               data_loader.batch_size * data_loader.seq_length,
                                checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
@@ -173,8 +176,6 @@ def main(_):
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
-        sess.run(tf.assign(train_model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
-
         data_loader.reset_batch_pointer()
 
         train_iters = 0
@@ -236,10 +237,10 @@ def main(_):
                       FLAGS.num_epochs * data_loader.num_batches,
                       e, train_cost, test_cost, train_perplexity, test_perplexity,
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
-
           current_step = tf.train.global_step(sess, train_model.global_step)
 
         train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
+
         print "model saved to {}".format(FLAGS.checkpoint_dir)
 
 
