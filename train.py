@@ -21,11 +21,10 @@ flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
-flags.DEFINE_float("learning_rate_step", 10000, "Learning rate step [10000]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
+flags.DEFINE_integer("nce_samples", 5, "NCE samples")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
-flags.DEFINE_float("grad_clip", 5., "clip gradients at this value")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
@@ -131,6 +130,7 @@ def main(_):
   data_loader = TextLoader(os.path.join(FLAGS.data_dir, FLAGS.dataset_name),
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
+  learning_rate_step = FLAGS.batch_size * FLAGS.seq_length
   graph = tf.Graph()
   valid_size = 50
   valid_window = 100
@@ -143,20 +143,20 @@ def main(_):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
-                              FLAGS.learning_rate, FLAGS.learning_rate_step,
+                              FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
-                              FLAGS.learning_rate, FLAGS.learning_rate_step,
+                              FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
                                FLAGS.layer_depth, FLAGS.rnn_size,
                                1, FLAGS.keep_prob, FLAGS.decay_rate,
-                               FLAGS.learning_rate, FLAGS.learning_rate_step,
+                               FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
@@ -213,7 +213,8 @@ def main(_):
                                                  valid_state, valid_model, False)
               valid_state = res["final_state"]
               valid_iters += 1
-              valid_costs += res["cost"]
+              valid_cost = res["cost"]
+              valid_costs += valid_cost
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
             valid_writer.add_summary(tf.scalar_summary("valid_perplexity", valid_perplexity).eval(), current_step)
@@ -246,10 +247,11 @@ def main(_):
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}) cost = {:.2f} train_perplexity = {:.2f} last_valid = {:.2f} time/batch = {:.2f}" \
+          print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, train_perplexity, valid_perplexity, time_batch)
+                      e, train_cost, valid_cost, train_perplexity, valid_perplexity,
+                      time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
 

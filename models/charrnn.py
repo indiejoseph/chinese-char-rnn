@@ -9,7 +9,7 @@ class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=128,
                seq_length=50, keep_prob=0.5, decay_rate=0.9999,
-               learning_rate=0.001, learning_rate_step=1000,
+               learning_rate=0.001, learning_rate_step=1000, nce_samples=25,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
     Model.__init__(self)
@@ -21,6 +21,7 @@ class CharRNN(Model):
     self.decay_rate = decay_rate
     self.learning_rate = learning_rate
     self.learning_rate_step = learning_rate_step
+    self.nce_samples = nce_samples
 
     # RNN
     self.rnn_size = rnn_size
@@ -56,19 +57,23 @@ class CharRNN(Model):
                                                   initial_state=self.initial_state,
                                                   dtype=tf.float32)
     outputs = tf.reshape(outputs, [-1, rnn_size])
+    labels = tf.reshape(self.targets, [-1, 1])
+
     self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
-
-    labels = tf.reshape(self.targets, [-1])
-    self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, labels)
+    self.loss = tf.nn.nce_loss(softmax_w,
+                               softmax_b,
+                               outputs,
+                               tf.to_int64(labels),
+                               nce_samples,
+                               vocab_size)
     self.cost = tf.reduce_mean(self.loss)
-
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
-    self.learning_rate = tf.Variable(0.0, trainable=False)
 
     tvars = tf.trainable_variables()
     lr = tf.train.exponential_decay(self.learning_rate, self.global_step, self.learning_rate_step,
                                     self.decay_rate, staircase=True)
+
     self.train_op = tf.train.AdamOptimizer(lr).minimize(self.cost, var_list=tvars,
                                                         global_step=self.global_step)
 
