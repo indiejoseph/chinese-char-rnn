@@ -106,7 +106,7 @@ class TextLoader():
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
     self.chars, counts = zip(*count_pairs)
     threshold = 10
-    self.chars = [c for i, c in enumerate(self.chars) if counts[i] > threshold]
+    self.chars = START_VOCAB + [c for i, c in enumerate(self.chars) if counts[i] > threshold and c not in START_VOCAB]
     self.vocab_size = len(self.chars)
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
     with open(vocab_file, 'wb') as f:
@@ -155,9 +155,6 @@ class TextLoader():
   def next_batch(self):
     x = np.copy(self.x_batches[self.pointer])
     y = self.y_batches[self.pointer]
-    # Dropword 10%
-    mask = np.random.choice([1, 0], size= x.shape, p=[.1, .9]).astype(np.bool)
-    x[mask] = UNK_ID
     self.pointer += 1
     return x, y
 
