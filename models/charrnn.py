@@ -8,7 +8,8 @@ import numpy as np
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=128,
-               seq_length=50, grad_clip=5., keep_prob=0.5,
+               seq_length=50, keep_prob=0.5, decay_rate=0.9999,
+               learning_rate=0.001, learning_rate_step=1000,
                checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
 
     Model.__init__(self)
@@ -17,11 +18,13 @@ class CharRNN(Model):
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
+    self.decay_rate = decay_rate
+    self.learning_rate = learning_rate
+    self.learning_rate_step = learning_rate_step
 
     # RNN
     self.rnn_size = rnn_size
     self.layer_depth = layer_depth
-    self.grad_clip = grad_clip
     self.keep_prob = keep_prob
 
     self.cell = cell = rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
@@ -35,7 +38,7 @@ class CharRNN(Model):
     self.initial_state = self.cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope('rnnlm'):
-      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
+      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       with tf.device("/cpu:0"):
@@ -52,8 +55,8 @@ class CharRNN(Model):
                                                   swap_memory=True,
                                                   initial_state=self.initial_state,
                                                   dtype=tf.float32)
-    output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
-    self.logits = tf.matmul(output, softmax_w) + softmax_b
+    outputs = tf.reshape(outputs, [-1, rnn_size])
+    self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
 
     labels = tf.reshape(self.targets, [-1])
@@ -64,9 +67,10 @@ class CharRNN(Model):
     self.learning_rate = tf.Variable(0.0, trainable=False)
 
     tvars = tf.trainable_variables()
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
-    optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
-    self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
+    lr = tf.train.exponential_decay(self.learning_rate, self.global_step, self.learning_rate_step,
+                                    self.decay_rate, staircase=True)
+    self.train_op = tf.train.AdamOptimizer(lr).minimize(self.cost, var_list=tvars,
+                                                        global_step=self.global_step)
 
 
 if __name__ == '__main__':

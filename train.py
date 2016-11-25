@@ -20,7 +20,8 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
+flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
+flags.DEFINE_float("learning_rate_step", 10000, "Learning rate step [10000]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
@@ -141,18 +142,21 @@ def main(_):
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
-                              FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
+                              FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
+                              FLAGS.learning_rate, FLAGS.learning_rate_step,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
-                              FLAGS.seq_length, FLAGS.grad_clip, FLAGS.keep_prob,
+                              FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
+                              FLAGS.learning_rate, FLAGS.learning_rate_step,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
                                FLAGS.layer_depth, FLAGS.rnn_size,
-                               1, FLAGS.grad_clip, FLAGS.keep_prob,
+                               1, FLAGS.keep_prob, FLAGS.decay_rate,
+                               FLAGS.learning_rate, FLAGS.learning_rate_step,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
@@ -183,8 +187,6 @@ def main(_):
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
-        sess.run(tf.assign(train_model.learning_rate, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
-
         data_loader.reset_batch_pointer()
 
         state = sess.run(train_model.initial_state)
