@@ -130,7 +130,7 @@ def main(_):
   data_loader = TextLoader(os.path.join(FLAGS.data_dir, FLAGS.dataset_name),
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
-  learning_rate_step = FLAGS.batch_size * FLAGS.seq_length
+  learning_rate_step = data_loader.num_batches * FLAGS.seq_length
   graph = tf.Graph()
   valid_size = 50
   valid_window = 100
