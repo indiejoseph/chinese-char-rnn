@@ -1,7 +1,8 @@
 import sys
 from base import Model
 import tensorflow as tf
-from tensorflow.python.ops import rnn_cell
+from tensorflow.python.ops import rnn_cell, seq2seq
+import math
 import numpy as np
 
 
@@ -39,24 +40,28 @@ class CharRNN(Model):
     self.initial_state = self.cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope('rnnlm'):
-      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size])
+      softmax_w = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
+                              stddev=1.0 / math.sqrt(rnn_size)))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.1, 0.1))
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+        inputs = tf.split(1, self.seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
+        inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
-    outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
-                                                  inputs,
-                                                  time_major=False,
-                                                  swap_memory=True,
-                                                  initial_state=self.initial_state,
-                                                  dtype=tf.float32)
-    outputs = tf.reshape(outputs, [-1, rnn_size])
+    def loop(prev, _):
+      prev = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
+      prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
+      return tf.nn.embedding_lookup(self.embedding, prev_symbol)
+
+    outputs, self.final_state = seq2seq.rnn_decoder(inputs, self.initial_state, self.cell,
+                                                    loop_function=loop if infer else None, scope='rnnlm')
+    output = tf.reshape(outputs, [-1, rnn_size])
     labels = tf.reshape(self.targets, [-1, 1])
 
-    self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
+    self.logits = tf.matmul(output, softmax_w, transpose_b=True) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
     self.loss = tf.nn.nce_loss(softmax_w,
                                softmax_b,
