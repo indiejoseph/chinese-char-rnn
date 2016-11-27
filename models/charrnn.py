@@ -33,7 +33,7 @@ class CharRNN(Model):
     self.cell = cell = rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
 
     if is_training and keep_prob < 1:
-      self.cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
+      self.cell = rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob, output_keep_prob=1.0)
 
     self.cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
