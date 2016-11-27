@@ -3,6 +3,7 @@ from base import Model
 import tensorflow as tf
 from tensorflow.python.ops import rnn_cell
 import numpy as np
+import math
 
 
 class CharRNN(Model):
@@ -39,12 +40,14 @@ class CharRNN(Model):
     self.initial_state = self.cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope('rnnlm'):
-      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size])
+      softmax_w = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
+                              stddev=1.0 / math.sqrt(rnn_size)))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       with tf.device("/cpu:0"):
+        init_width = 0.5 / rnn_size
         self.embedding = tf.get_variable("embedding",
-                                         initializer=tf.random_uniform([vocab_size, rnn_size], -0.1, 0.1))
+                                         initializer=tf.random_uniform([vocab_size, rnn_size], -init_width, init_width))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
