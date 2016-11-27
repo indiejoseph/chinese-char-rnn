@@ -144,20 +144,20 @@ def main(_):
                               FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
                               FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
-                              FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=False)
+                              FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=True)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
                               FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
-                              FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+                              FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
                                FLAGS.layer_depth, FLAGS.rnn_size,
                                1, FLAGS.keep_prob, FLAGS.decay_rate,
                                FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
-                               FLAGS.checkpoint_dir, FLAGS.dataset_name, infer=True)
+                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)

@@ -11,7 +11,7 @@ class CharRNN(Model):
                layer_depth=2, rnn_size=128,
                seq_length=50, keep_prob=0.5, decay_rate=0.9999,
                learning_rate=0.001, learning_rate_step=1000, nce_samples=25,
-               checkpoint_dir="checkpoint", dataset_name="wiki", infer=False):
+               checkpoint_dir="checkpoint", dataset_name="wiki", is_training=False):
 
     Model.__init__(self)
 
@@ -23,6 +23,7 @@ class CharRNN(Model):
     self.learning_rate = learning_rate
     self.learning_rate_step = learning_rate_step
     self.nce_samples = nce_samples
+    self.is_training = is_training
 
     # RNN
     self.rnn_size = rnn_size
@@ -31,7 +32,7 @@ class CharRNN(Model):
 
     self.cell = cell = rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
 
-    if not infer and keep_prob < 1:
+    if is_training and keep_prob < 1:
       self.cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
     self.cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
