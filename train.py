@@ -203,7 +203,7 @@ def main(_):
           res, time_batch = run_epochs(sess, x, y, state, train_model)
           train_cost = res["cost"]
           state = res["final_state"]
-          train_iters += FLAGS.seq_length
+          train_iters += 1
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
@@ -214,7 +214,7 @@ def main(_):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
               valid_state = res["final_state"]
-              valid_iters += FLAGS.seq_length
+              valid_iters += 1
               valid_cost = res["cost"]
               valid_costs += valid_cost
               valid_perplexity = np.exp(valid_costs / valid_iters)
