@@ -40,7 +40,7 @@ class CharRNN(Model):
     self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
-    self.initial_state = self.cell.zero_state(batch_size, tf.float32)
+    self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     softmax_w = tf.get_variable("softmax_w", [hidden_size, vocab_size])
     softmax_b = tf.get_variable("softmax_b", [vocab_size])
@@ -61,18 +61,11 @@ class CharRNN(Model):
     outputs = tf.reshape(outputs, [-1, hidden_size])
     labels = tf.reshape(self.targets, [-1, 1])
 
-    nce_weights = tf.Variable(tf.truncated_normal([vocab_size, hidden_size],
-                            stddev=1.0 / math.sqrt(hidden_size)))
-    nce_biases = tf.get_variable("nce_biase", [vocab_size])
-
     self.logits = tf.matmul(outputs, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
-    self.loss = tf.nn.nce_loss(nce_weights,
-                               nce_biases,
-                               outputs,
-                               tf.to_int64(labels),
-                               nce_samples,
-                               vocab_size)
+    self.loss = seq2seq.sequence_loss_by_example([self.logits], [labels],
+                                                 [tf.ones([batch_size * seq_length])],
+                                                 vocab_size)
     self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
