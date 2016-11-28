@@ -8,8 +8,8 @@ import math
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=256,
-               seq_length=50, decay_rate=0.9999,
+               layer_depth=2, embedding_size=128, hidden_size=256,
+               seq_length=50, keep_prob=0.5, decay_rate=0.9999,
                learning_rate=0.001, learning_rate_step=1000, grad_norm=5.0, nce_samples=25,
                checkpoint_dir="checkpoint", dataset_name="wiki", is_training=True):
 
@@ -27,22 +27,28 @@ class CharRNN(Model):
     self.grad_norm = grad_norm
 
     # RNN
-    self.rnn_size = rnn_size
+    self.embedding_size = embedding_size
+    self.hidden_size = hidden_size
     self.layer_depth = layer_depth
+    self.keep_prob = keep_prob
 
-    cell = tf.nn.rnn_cell.BasicLSTMCell(rnn_size, state_is_tuple=True)
+    cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size, forget_bias=0.0, state_is_tuple=True)
+
+    if is_training and keep_prob < 1:
+      cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
+
     self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
     self.initial_state = self.cell.zero_state(batch_size, tf.float32)
 
-    softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
+    softmax_w = tf.get_variable("softmax_w", [hidden_size, vocab_size])
     softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
     with tf.device("/cpu:0"):
-      init_width = 0.5 / rnn_size
+      init_width = 0.5 / embedding_size
       self.embedding = tf.get_variable("embedding",
-                                       initializer=tf.random_uniform([vocab_size, rnn_size], -init_width, init_width))
+                                       initializer=tf.random_uniform([vocab_size, hidden_size], -init_width, init_width))
       inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
       inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
@@ -52,18 +58,17 @@ class CharRNN(Model):
       return tf.nn.embedding_lookup(self.embedding, prev_symbol)
 
     outputs, self.final_state = seq2seq.rnn_decoder(inputs, self.initial_state, cell, loop_function=loop if not is_training else None, scope='rnnlm')
-
-    outputs = tf.reshape(outputs, [-1, rnn_size])
+    outputs = tf.reshape(outputs, [-1, hidden_size])
     labels = tf.reshape(self.targets, [-1, 1])
 
-    nce_weights = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
-                                                  stddev=1.0 / math.sqrt(rnn_size)))
-    nce_biase = tf.get_variable("nce_biase", [vocab_size])
+    nce_weights = tf.Variable(tf.truncated_normal([vocab_size, hidden_size],
+                            stddev=1.0 / math.sqrt(hidden_size)))
+    nce_biases = tf.get_variable("nce_biase", [vocab_size])
 
     self.logits = tf.matmul(outputs, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
     self.loss = tf.nn.nce_loss(nce_weights,
-                               nce_biase,
+                               nce_biases,
                                outputs,
                                tf.to_int64(labels),
                                nce_samples,
