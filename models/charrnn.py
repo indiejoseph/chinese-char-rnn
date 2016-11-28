@@ -73,7 +73,7 @@ class CharRNN(Model):
                                tf.to_int64(labels),
                                nce_samples,
                                vocab_size)
-    self.cost = tf.reduce_mean(self.loss)
+    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
     tvars = tf.trainable_variables()
