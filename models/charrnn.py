@@ -48,15 +48,14 @@ class CharRNN(Model):
       init_width = 0.5 / rnn_size
       self.embedding = tf.get_variable("embedding",
                                        initializer=tf.random_uniform([vocab_size, rnn_size], -init_width, init_width))
-      inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
-      inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+      inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
-    def loop(prev, _):
-      prev = tf.matmul(prev, softmax_w) + softmax_b
-      prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
-      return tf.nn.embedding_lookup(self.embedding, prev_symbol)
-
-    outputs, self.final_state = seq2seq.rnn_decoder(inputs, self.initial_state, cell, loop_function=loop if not is_training else None, scope='rnnlm')
+    outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
+                                                  inputs,
+                                                  time_major=False,
+                                                  swap_memory=True,
+                                                  initial_state=self.initial_state,
+                                                  dtype=tf.float32)
     outputs = tf.reshape(outputs, [-1, rnn_size])
     labels = tf.reshape(self.targets, [-1, 1])
 
