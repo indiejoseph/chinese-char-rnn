@@ -16,8 +16,7 @@ pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("embedding_size", 128, "The dimension of char embedding matrix [128]")
-flags.DEFINE_integer("hidden_size", 256, "The dimension of hidden layers [256]")
+flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [128]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
@@ -143,20 +142,20 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.embedding_size, FLAGS.hidden_size,
+                              FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
                               FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=True)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.embedding_size, FLAGS.hidden_size,
+                              FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
                               FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
-                               FLAGS.layer_depth, FLAGS.embedding_size, FLAGS.hidden_size,
+                               FLAGS.layer_depth, FLAGS.rnn_size,
                                1, FLAGS.keep_prob, FLAGS.decay_rate,
                                FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
