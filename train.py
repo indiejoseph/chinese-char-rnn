@@ -20,7 +20,8 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
+flags.DEFINE_float("learning_rate", 1.0, "Learning rate [1.0]")
+flags.DEFINE_float("grad_norm", 5.0, "grad_norm")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_integer("nce_samples", 5, "NCE samples")
@@ -143,20 +144,20 @@ def main(_):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
-                              FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
+                              FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=True)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
                               FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
-                              FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
+                              FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
                                FLAGS.layer_depth, FLAGS.rnn_size,
                                1, FLAGS.keep_prob, FLAGS.decay_rate,
-                               FLAGS.learning_rate, learning_rate_step, FLAGS.nce_samples,
+                               FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
@@ -201,7 +202,7 @@ def main(_):
           res, time_batch = run_epochs(sess, x, y, state, train_model)
           train_cost = res["cost"]
           state = res["final_state"]
-          train_iters += 1
+          train_iters += FLAGS.seq_length
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
 
@@ -212,7 +213,7 @@ def main(_):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
               valid_state = res["final_state"]
-              valid_iters += 1
+              valid_iters += FLAGS.seq_length
               valid_cost = res["cost"]
               valid_costs += valid_cost
               valid_perplexity = np.exp(valid_costs / valid_iters)

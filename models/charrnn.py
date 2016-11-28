@@ -10,7 +10,7 @@ class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=128,
                seq_length=50, keep_prob=0.5, decay_rate=0.9999,
-               learning_rate=0.001, learning_rate_step=1000, nce_samples=25,
+               learning_rate=0.001, learning_rate_step=1000, grad_norm=5.0, nce_samples=25,
                checkpoint_dir="checkpoint", dataset_name="wiki", is_training=False):
 
     Model.__init__(self)
@@ -24,6 +24,7 @@ class CharRNN(Model):
     self.learning_rate_step = learning_rate_step
     self.nce_samples = nce_samples
     self.is_training = is_training
+    self.grad_norm = grad_norm
 
     # RNN
     self.rnn_size = rnn_size
@@ -68,15 +69,16 @@ class CharRNN(Model):
                                tf.to_int64(labels),
                                nce_samples,
                                vocab_size)
-    self.cost = tf.reduce_mean(self.loss)
+    self.cost = tf.reduce_sum(self.loss) / batch_size
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
     tvars = tf.trainable_variables()
     lr = tf.train.exponential_decay(self.learning_rate, self.global_step, self.learning_rate_step,
                                     self.decay_rate, staircase=True)
 
-    self.train_op = tf.train.AdamOptimizer(lr).minimize(self.cost, var_list=tvars,
-                                                        global_step=self.global_step)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), self.grad_norm)
+    optimizer = tf.train.GradientDescentOptimizer(lr)
+    self.train_op = optimizer.apply_gradients(zip(grads, tvars),global_step=self.global_step)
 
 
 if __name__ == '__main__':
