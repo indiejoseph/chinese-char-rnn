@@ -77,7 +77,7 @@ class CharRNN(Model):
                                     self.decay_rate, staircase=True)
 
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), self.grad_norm)
-    optimizer = tf.train.AdamOptimizer(lr)
+    optimizer = tf.train.GradientDescentOptimizer(lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars),global_step=self.global_step)
 
 
