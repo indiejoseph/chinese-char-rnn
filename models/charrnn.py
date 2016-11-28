@@ -45,10 +45,11 @@ class CharRNN(Model):
     softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
     with tf.device("/cpu:0"):
-      init_width = 0.5 / rnn_size
-      self.embedding = tf.get_variable("embedding",
-                                       initializer=tf.random_uniform([vocab_size, rnn_size], -init_width, init_width))
+      self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size])
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+
+    if is_training and self.keep_prob < 1:
+      inputs = tf.nn.dropout(inputs, self.keep_prob)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
                                                   inputs,
@@ -56,14 +57,20 @@ class CharRNN(Model):
                                                   swap_memory=True,
                                                   initial_state=self.initial_state,
                                                   dtype=tf.float32)
-    outputs = tf.reshape(outputs, [-1, rnn_size])
-    labels = tf.reshape(self.targets, [-1, 1])
 
-    self.logits = tf.matmul(outputs, softmax_w) + softmax_b
+    output = tf.reshape(outputs, [-1, rnn_size])
+    labels = tf.reshape(self.targets, [-1, 1])
+    nce_weights = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
+                            stddev=1.0 / math.sqrt(rnn_size)))
+    nce_biases = tf.get_variable("nce_biase", [vocab_size])
+    self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
-    self.loss = seq2seq.sequence_loss_by_example([self.logits], [labels],
-                                                 [tf.ones([batch_size * seq_length])],
-                                                 vocab_size)
+    self.loss = tf.nn.nce_loss(nce_weights,
+                               nce_biases,
+                               output,
+                               tf.to_int64(labels),
+                               nce_samples,
+                               vocab_size)
     self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
