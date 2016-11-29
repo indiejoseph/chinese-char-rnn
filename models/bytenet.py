@@ -10,7 +10,7 @@ class ByteNet(Model):
     encoder_filter_width=3, decoder_filter_width=3,
     encoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
     decoder_dilations="1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16",
-    decay_rate=0.95, learning_rate=0.001, learning_rate_step=1000,
+    decay_rate=0.95, learning_rate=0.001, learning_rate_step=1000, grad_norm=5.0,
     checkpoint_dir="checkpoint", dataset_name="wiki"
   ):
     """
@@ -39,6 +39,7 @@ class ByteNet(Model):
     self.decay_rate = decay_rate
     self.learning_rate = learning_rate
     self.learning_rate_step = learning_rate_step
+    self.grad_norm = grad_norm
     self.dataset_name = dataset_name
 
     self.w_source_embedding = tf.get_variable("w_source_embedding",
@@ -72,8 +73,10 @@ class ByteNet(Model):
     tvars = tf.trainable_variables()
     lr = tf.train.exponential_decay(self.learning_rate, self.global_step, self.learning_rate_step,
                                     self.decay_rate, staircase=True)
-    self.train_op = tf.train.AdamOptimizer(lr).minimize(self.cost, var_list=tvars,
-                                                        global_step=self.global_step)
+
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_norm)
+    optimizer = tf.train.GradientDescentOptimizer(lr)
+    self.train_op = optimizer.apply_gradients(zip(grads, tvars),global_step=self.global_step)
 
   def decode_layer(self, input_, dilation, layer_no):
     relu1 = tf.nn.relu(input_, name="dec_relu1_layer{}".format(layer_no))

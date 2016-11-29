@@ -21,8 +21,9 @@ flags.DEFINE_string("dialations", "1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1
 flags.DEFINE_integer("filter_width", 3, "Filter width for conv")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
+flags.DEFINE_float("learning_rate", 1., "Learning rate [1.]")
 flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
+flags.DEFINE_float("grad_norm", 5.0, "grad_norm")
 flags.DEFINE_integer("test_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -131,20 +132,20 @@ def main(_):
       with tf.name_scope('training'):
         train_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
-                              FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate,
+                              FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate, FLAGS.grad_norm,
                               data_loader.batch_size * data_loader.seq_length,
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         test_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, FLAGS.batch_size,
                               FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
-                              FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate,
+                              FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate, FLAGS.grad_norm,
                               data_loader.batch_size * data_loader.seq_length,
                               checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
       with tf.name_scope('sample'):
         simple_model = ByteNet(vocab_size, vocab_size, FLAGS.residual_channels, 1,
                                FLAGS.seq_length, FLAGS.filter_width, FLAGS.filter_width,
-                               FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate,
+                               FLAGS.dialations, FLAGS.dialations, FLAGS.decay_rate, FLAGS.learning_rate, FLAGS.grad_norm,
                                data_loader.batch_size * data_loader.seq_length,
                                checkpoint_dir=FLAGS.checkpoint_dir, dataset_name=FLAGS.dataset_name)
 
