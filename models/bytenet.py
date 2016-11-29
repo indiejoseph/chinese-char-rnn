@@ -43,12 +43,14 @@ class ByteNet(Model):
     self.dataset_name = dataset_name
 
     self.w_source_embedding = tf.get_variable("w_source_embedding",
-      initializer=tf.random_uniform([self.n_source_quant, 2*self.residual_channels], -0.1, 0.1)
+      [self.n_source_quant, 2*self.residual_channels]
+      initializer=tf.truncated_normal_initializer(stddev=0.02)
     )
 
     # TO BE CONCATENATED WITH THE ENCODER EMBEDDING
     self.w_target_embedding = tf.get_variable("w_target_embedding",
-      initializer=tf.random_uniform([self.n_target_quant, self.residual_channels], -0.1, 0.1)
+      [self.n_target_quant, self.residual_channels]
+      initializer=tf.truncated_normal_initializer(stddev=0.02)
     )
 
     self.sentence = tf.placeholder("int32", [self.batch_size, self.seq_length], name="sentence")
@@ -75,7 +77,7 @@ class ByteNet(Model):
                                     self.decay_rate, staircase=True)
 
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_norm)
-    optimizer = tf.train.GradientDescentOptimizer(lr)
+    optimizer = tf.train.AdamOptimizer(lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars),global_step=self.global_step)
 
   def decode_layer(self, input_, dilation, layer_no):
