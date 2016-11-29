@@ -43,13 +43,13 @@ class ByteNet(Model):
     self.dataset_name = dataset_name
 
     self.w_source_embedding = tf.get_variable("w_source_embedding",
-      [self.n_source_quant, 2*self.residual_channels]
+      [self.n_source_quant, 2*self.residual_channels],
       initializer=tf.truncated_normal_initializer(stddev=0.02)
     )
 
     # TO BE CONCATENATED WITH THE ENCODER EMBEDDING
     self.w_target_embedding = tf.get_variable("w_target_embedding",
-      [self.n_target_quant, self.residual_channels]
+      [self.n_target_quant, self.residual_channels],
       initializer=tf.truncated_normal_initializer(stddev=0.02)
     )
 
