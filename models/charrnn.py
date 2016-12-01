@@ -41,9 +41,6 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
-    softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
-    softmax_b = tf.get_variable("softmax_b", [vocab_size])
-
     with tf.device("/cpu:0"):
       self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size])
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
@@ -60,22 +57,12 @@ class CharRNN(Model):
 
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     labels = tf.reshape(self.targets, [-1])
-
-    with tf.variable_scope("nce_loss"):
-      softmax_w = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
-                                                    stddev=1.0 / math.sqrt(rnn_size)))
-      softmax_b = tf.get_variable("softmax_b", [vocab_size])
-
-      self.train_cost = tf.reduce_mean(tf.nn.nce_loss(softmax_w,
-                                                      softmax_b,
-                                                      output,
-                                                      tf.expand_dims(labels, 1),
-                                                      nce_samples,
-                                                      vocab_size,
-                                                      remove_accidental_hits=False))
+    softmax_w = tf.Variable(tf.truncated_normal([rnn_size, vocab_size],
+                                                  stddev=1.0 / math.sqrt(rnn_size)))
+    softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
     with tf.variable_scope("output"):
-      self.logits = tf.matmul(output, softmax_w, transpose_b=True) + softmax_b
+      self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
     self.loss = seq2seq.sequence_loss_by_example([self.logits],
@@ -89,7 +76,7 @@ class CharRNN(Model):
     lr = tf.train.exponential_decay(self.learning_rate, self.global_step, self.learning_rate_step,
                                     self.decay_rate, staircase=True)
 
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.train_cost, tvars), self.grad_norm)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), self.grad_norm)
     optimizer = tf.train.GradientDescentOptimizer(lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars),global_step=self.global_step)
 
