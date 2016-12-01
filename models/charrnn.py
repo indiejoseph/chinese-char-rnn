@@ -67,18 +67,14 @@ class CharRNN(Model):
       nce_biases = tf.get_variable("nce_biase", [vocab_size])
 
       self.train_cost = tf.reduce_mean(tf.nn.nce_loss(nce_weights,
-                                                    nce_biases,
-                                                    output,
-                                                    tf.to_int64(labels),
-                                                    nce_samples,
-                                                    vocab_size))
+                                                      nce_biases,
+                                                      output,
+                                                      tf.to_int64(labels),
+                                                      nce_samples,
+                                                      vocab_size))
 
     with tf.variable_scope("output"):
-      softmax_w = tf.Variable(tf.truncated_normal([rnn_size, vocab_size],
-                                                   stddev=1.0 / math.sqrt(rnn_size)))
-      softmax_b = tf.get_variable("softmax_b", [vocab_size])
-
-      self.logits = tf.matmul(output, softmax_w) + softmax_b
+      self.logits = tf.matmul(output, nce_weights, transpose_b=True) + nce_biases
       self.probs = tf.nn.softmax(self.logits)
 
     self.loss = seq2seq.sequence_loss_by_example([self.logits],
