@@ -195,6 +195,7 @@ def main(_):
         valid_iters = 0
         train_costs = 0
         valid_costs = 0
+        valid_cost = 0
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
