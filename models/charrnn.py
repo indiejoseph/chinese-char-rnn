@@ -65,20 +65,25 @@ class CharRNN(Model):
     nce_biases = tf.get_variable("nce_biase", [vocab_size])
     self.logits = tf.matmul(output, softmax_w) + softmax_b
     self.probs = tf.nn.softmax(self.logits)
-    self.loss = tf.nn.nce_loss(nce_weights,
+    self.loss = seq2seq.sequence_loss_by_example([self.logits],
+                                                 [tf.reshape(self.targets, [-1])],
+                                                 [tf.ones([batch_size * seq_length])],
+                                                 vocab_size)
+    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
+    nce_loss = tf.nn.nce_loss(nce_weights,
                                nce_biases,
                                output,
                                tf.to_int64(labels),
                                nce_samples,
                                vocab_size)
-    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
+    self.nce_cost = tf.reduce_sum(nce_loss) / batch_size / seq_length
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
     tvars = tf.trainable_variables()
     lr = tf.train.exponential_decay(self.learning_rate, self.global_step, self.learning_rate_step,
                                     self.decay_rate, staircase=True)
 
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), self.grad_norm)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.nce_cost, tvars), self.grad_norm)
     optimizer = tf.train.GradientDescentOptimizer(lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars),global_step=self.global_step)
 
