@@ -60,30 +60,39 @@ class CharRNN(Model):
 
     output = tf.reshape(outputs, [-1, rnn_size])
     labels = tf.reshape(self.targets, [-1, 1])
-    nce_weights = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
-                            stddev=1.0 / math.sqrt(rnn_size)))
-    nce_biases = tf.get_variable("nce_biase", [vocab_size])
-    self.logits = tf.matmul(output, softmax_w) + softmax_b
-    self.probs = tf.nn.softmax(self.logits)
+
+    with tf.variable_scope("nce_loss"):
+      nce_weights = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
+                                                    stddev=1.0 / math.sqrt(rnn_size)))
+      nce_biases = tf.get_variable("nce_biase", [vocab_size])
+
+      self.train_cost = tf.reduce_mean(tf.nn.nce_loss(nce_weights,
+                                                    nce_biases,
+                                                    output,
+                                                    tf.to_int64(labels),
+                                                    nce_samples,
+                                                    vocab_size))
+
+    with tf.variable_scope("output"):
+      softmax_w = tf.Variable(tf.truncated_normal([rnn_size, vocab_size],
+                                                   stddev=1.0 / math.sqrt(rnn_size)))
+      softmax_b = tf.get_variable("softmax_b", [vocab_size])
+
+      self.logits = tf.matmul(output, softmax_w) + softmax_b
+      self.probs = tf.nn.softmax(self.logits)
+
     self.loss = seq2seq.sequence_loss_by_example([self.logits],
                                                  [tf.reshape(self.targets, [-1])],
                                                  [tf.ones([batch_size * seq_length])],
                                                  vocab_size)
-    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
-    nce_loss = tf.nn.nce_loss(nce_weights,
-                               nce_biases,
-                               output,
-                               tf.to_int64(labels),
-                               nce_samples,
-                               vocab_size)
-    self.nce_cost = tf.reduce_sum(nce_loss) / batch_size / seq_length
+    self.cost = tf.reduce_mean(self.loss)
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
     tvars = tf.trainable_variables()
     lr = tf.train.exponential_decay(self.learning_rate, self.global_step, self.learning_rate_step,
                                     self.decay_rate, staircase=True)
 
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.nce_cost, tvars), self.grad_norm)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.train_cost, tvars), self.grad_norm)
     optimizer = tf.train.GradientDescentOptimizer(lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars),global_step=self.global_step)
 
