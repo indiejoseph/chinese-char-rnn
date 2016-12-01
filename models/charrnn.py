@@ -58,23 +58,24 @@ class CharRNN(Model):
                                                   initial_state=self.initial_state,
                                                   dtype=tf.float32)
 
-    output = tf.reshape(outputs, [-1, rnn_size])
-    labels = tf.reshape(self.targets, [-1, 1])
+    output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
+    labels = tf.reshape(self.targets, [-1])
 
     with tf.variable_scope("nce_loss"):
-      nce_weights = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
+      softmax_w = tf.Variable(tf.truncated_normal([vocab_size, rnn_size],
                                                     stddev=1.0 / math.sqrt(rnn_size)))
-      nce_biases = tf.get_variable("nce_biase", [vocab_size])
+      softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      self.train_cost = tf.reduce_mean(tf.nn.nce_loss(nce_weights,
-                                                      nce_biases,
+      self.train_cost = tf.reduce_mean(tf.nn.nce_loss(softmax_w,
+                                                      softmax_b,
                                                       output,
-                                                      tf.to_int64(labels),
+                                                      tf.expand_dims(labels, 1),
                                                       nce_samples,
-                                                      vocab_size))
+                                                      vocab_size,
+                                                      remove_accidental_hits=False))
 
     with tf.variable_scope("output"):
-      self.logits = tf.matmul(output, nce_weights, transpose_b=True) + nce_biases
+      self.logits = tf.matmul(output, softmax_w, transpose_b=True) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
     self.loss = seq2seq.sequence_loss_by_example([self.logits],
