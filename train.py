@@ -20,11 +20,9 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1.0, "Learning rate [1.0]")
+flags.DEFINE_float("learning_rate", 0.01, "Learning rate [0.01]")
 flags.DEFINE_float("grad_norm", 5.0, "grad_norm")
-flags.DEFINE_float("decay_rate", 0.97, "Decay rate [0.97]")
-flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
-flags.DEFINE_integer("nce_samples", 5, "NCE samples")
+flags.DEFINE_float("decay_rate", 0.9, "Decay rate [0.9]")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -131,7 +129,7 @@ def main(_):
   data_loader = TextLoader(os.path.join(FLAGS.data_dir, FLAGS.dataset_name),
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
-  learning_rate_step = data_loader.num_batches * FLAGS.seq_length
+  learning_rate_step = 1000
   graph = tf.Graph()
   valid_size = 50
   valid_window = 100
@@ -142,22 +140,19 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size,
-                              FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
-                              FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
+                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.seq_length,
+                              FLAGS.decay_rate, FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=True)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size,
-                              FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
-                              FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
+                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.seq_length,
+                              FLAGS.decay_rate, FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
-                               FLAGS.layer_depth, FLAGS.rnn_size,
-                               1, FLAGS.keep_prob, FLAGS.decay_rate,
-                               FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm, FLAGS.nce_samples,
+                               FLAGS.layer_depth, FLAGS.rnn_size, 1,
+                               FLAGS.decay_rate, FLAGS.learning_rate, learning_rate_step, FLAGS.grad_norm,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
@@ -215,8 +210,8 @@ def main(_):
                                                  valid_state, valid_model, False)
               valid_state = res["final_state"]
               valid_iters += 1
-              valid_cost = res["cost"]
-              valid_costs += valid_cost
+              valid_cost += res["cost"]
+              valid_costs += res["cost"]
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
             valid_writer.add_summary(tf.scalar_summary("valid_perplexity", valid_perplexity).eval(), current_step)
@@ -252,7 +247,7 @@ def main(_):
           print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, valid_cost, train_perplexity, valid_perplexity,
+                      e, train_cost, (valid_cost / data_loader.num_valid_batches), train_perplexity, valid_perplexity,
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
