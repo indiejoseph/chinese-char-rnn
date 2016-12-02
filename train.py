@@ -190,7 +190,6 @@ def main(_):
         valid_iters = 0
         train_costs = 0
         valid_costs = 0
-        valid_cost = 0
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
@@ -204,6 +203,7 @@ def main(_):
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = sess.run(valid_model.initial_state)
+            valid_cost = 0
 
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
