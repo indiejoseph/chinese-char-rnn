@@ -9,21 +9,14 @@ import math
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=128,
-               seq_length=50, keep_prob=0.5, decay_rate=0.9999,
-               learning_rate=0.001, learning_rate_step=1000, grad_norm=5.0,
+               seq_length=50, keep_prob=0.5,
+               learning_rate=0.001, grad_norm=5.0,
                checkpoint_dir="checkpoint", dataset_name="wiki", is_training=True):
 
     Model.__init__(self)
 
-    self.batch_size = batch_size
-    self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
-    self.decay_rate = decay_rate
-    self.learning_rate = learning_rate
-    self.learning_rate_step = learning_rate_step
-    self.is_training = is_training
-    self.grad_norm = grad_norm
 
     # RNN
     self.rnn_size = rnn_size
@@ -43,9 +36,6 @@ class CharRNN(Model):
     with tf.device("/cpu:0"):
       self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size])
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
-
-    if is_training and self.keep_prob < 1:
-      inputs = tf.nn.dropout(inputs, self.keep_prob)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
                                                   inputs,
@@ -71,11 +61,8 @@ class CharRNN(Model):
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
     tvars = tf.trainable_variables()
-    lr = tf.train.exponential_decay(self.learning_rate, self.global_step, self.learning_rate_step,
-                                    self.decay_rate, staircase=True)
-
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), self.grad_norm)
-    optimizer = tf.train.AdamOptimizer(lr)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_norm)
+    optimizer = tf.train.AdamOptimizer(learning_rate)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars),global_step=self.global_step)
 
 
