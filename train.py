@@ -242,8 +242,6 @@ def main(_):
             text_file.write(log_str)
             text_file.close()
 
-            train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-
           # print log
           print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
