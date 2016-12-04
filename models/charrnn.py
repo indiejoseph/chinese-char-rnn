@@ -34,7 +34,8 @@ class CharRNN(Model):
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.device("/cpu:0"):
-      self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size])
+      self.embedding = tf.Variable(tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0),
+                                   name="embedding")
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
