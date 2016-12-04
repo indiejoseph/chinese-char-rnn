@@ -142,20 +142,20 @@ def main(_):
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
-                              FLAGS.seq_length, FLAGS.keep_rate, FLAGS.decay_rate,
+                              FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
                               FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=True)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size,
-                              FLAGS.seq_length, FLAGS.keep_rate, FLAGS.decay_rate,
+                              FLAGS.seq_length, FLAGS.keep_prob, FLAGS.decay_rate,
                               FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
                                FLAGS.layer_depth, FLAGS.rnn_size,
-                               1, FLAGS.keep_rate, FLAGS.decay_rate,
+                               1, FLAGS.keep_prob, FLAGS.decay_rate,
                                FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
 
