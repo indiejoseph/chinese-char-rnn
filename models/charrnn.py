@@ -40,6 +40,8 @@ class CharRNN(Model):
 
     outputs, self.final_state = tf.nn.rnn(self.cell,
                                           inputs,
+                                          time_major=False,
+                                          swap_memory=True,
                                           initial_state=self.initial_state,
                                           dtype=tf.float64)
 
