@@ -9,7 +9,7 @@ import math
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=128,
-               seq_length=50, keep_prob=0.5,
+               seq_length=50,
                learning_rate=0.001, grad_norm=5.0,
                checkpoint_dir="checkpoint", dataset_name="wiki", is_training=True):
 
@@ -17,16 +17,13 @@ class CharRNN(Model):
 
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
+    self.is_training = is_training
 
     # RNN
     self.rnn_size = rnn_size
     self.layer_depth = layer_depth
-    self.keep_prob = keep_prob
 
     cell = rnn_cell.BasicLSTMCell(rnn_size, forget_bias=0.0, state_is_tuple=True)
-
-    if is_training and keep_prob < 1:
-      cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
     self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
