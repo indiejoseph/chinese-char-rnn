@@ -38,12 +38,12 @@ class CharRNN(Model):
                                    name="embedding")
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
-    outputs, self.final_state = tf.nn.rnn(self.cell,
-                                          inputs,
-                                          time_major=False,
-                                          swap_memory=True,
-                                          initial_state=self.initial_state,
-                                          dtype=tf.float64)
+    outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
+                                                  inputs,
+                                                  time_major=False,
+                                                  swap_memory=True,
+                                                  initial_state=self.initial_state,
+                                                  dtype=tf.float64)
 
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     softmax_w = tf.Variable(tf.truncated_normal([rnn_size, vocab_size],
