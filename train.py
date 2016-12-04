@@ -23,6 +23,7 @@ flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 0.01, "Learning rate [0.01]")
 flags.DEFINE_integer("learning_rate_step", 10000, "Learning rate step")
 flags.DEFINE_float("grad_norm", 5.0, "grad_norm")
+flags.DEFINE_float("keep_prob", 0.5, "Dropout rate")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate [0.9]")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
@@ -140,19 +141,22 @@ def main(_):
     with graph.as_default():
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.seq_length,
-                              FLAGS.decay_rate, FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
+                              FLAGS.layer_depth, FLAGS.rnn_size,
+                              FLAGS.seq_length, FLAGS.keep_rate, FLAGS.decay_rate,
+                              FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=True)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.seq_length,
-                              FLAGS.decay_rate, FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
+                              FLAGS.layer_depth, FLAGS.rnn_size,
+                              FLAGS.seq_length, FLAGS.keep_rate, FLAGS.decay_rate,
+                              FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
                               FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
-                               FLAGS.layer_depth, FLAGS.rnn_size, 1,
-                               FLAGS.decay_rate, FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
+                               FLAGS.layer_depth, FLAGS.rnn_size,
+                               1, FLAGS.keep_rate, FLAGS.decay_rate,
+                               FLAGS.learning_rate, FLAGS.learning_rate_step, FLAGS.grad_norm,
                                FLAGS.checkpoint_dir, FLAGS.dataset_name, is_training=False)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)

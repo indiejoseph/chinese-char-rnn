@@ -8,8 +8,9 @@ import math
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=128, seq_length=50,
-               decay_rate=0.9, learning_rate=0.001, learning_rate_step=1000, grad_norm=5.0,
+               layer_depth=2, rnn_size=128,
+               seq_length=50, keep_prob=0.5, decay_rate=0.9999,
+               learning_rate=0.001, learning_rate_step=1000, grad_norm=5.0,
                checkpoint_dir="checkpoint", dataset_name="wiki", is_training=True):
 
     Model.__init__(self)
@@ -18,17 +19,21 @@ class CharRNN(Model):
     self.seq_length = seq_length
     self.checkpoint_dir = checkpoint_dir
     self.dataset_name = dataset_name
+    self.decay_rate = decay_rate
     self.learning_rate = learning_rate
     self.learning_rate_step = learning_rate_step
     self.is_training = is_training
     self.grad_norm = grad_norm
-    self.decay_rate = decay_rate
 
     # RNN
     self.rnn_size = rnn_size
     self.layer_depth = layer_depth
+    self.keep_prob = keep_prob
 
     cell = rnn_cell.BasicLSTMCell(rnn_size, forget_bias=0.0, state_is_tuple=True)
+
+    if is_training and keep_prob < 1:
+      cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
     self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
@@ -38,6 +43,9 @@ class CharRNN(Model):
     with tf.device("/cpu:0"):
       self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size])
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+
+    if is_training and self.keep_prob < 1:
+      inputs = tf.nn.dropout(inputs, self.keep_prob)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
                                                   inputs,
