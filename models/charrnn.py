@@ -23,7 +23,7 @@ class CharRNN(Model):
     self.rnn_size = rnn_size
     self.layer_depth = layer_depth
 
-    cell = rnn_cell.BasicLSTMCell(rnn_size, forget_bias=0.0, state_is_tuple=True)
+    cell = rnn_cell.BasicLSTMCell(rnn_size, forget_bias=1.0, state_is_tuple=True)
 
     self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
@@ -33,19 +33,23 @@ class CharRNN(Model):
     with tf.device("/cpu:0"):
       self.embedding = tf.Variable(tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0),
                                    name="embedding")
-      inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+      inputs = tf.split(1, seq_length, tf.nn.embedding_lookup(self.embedding, self.input_data))
+      inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+      softmax_w = tf.Variable(tf.truncated_normal([rnn_size, vocab_size],
+                                                   stddev=1.0 / math.sqrt(rnn_size)))
+      softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-    outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
-                                                  inputs,
-                                                  time_major=False,
-                                                  swap_memory=True,
-                                                  initial_state=self.initial_state,
-                                                  dtype=tf.float32)
+    def predict_char(prev, _):
+      prev = tf.matmul(prev, softmax_w) + softmax_b
+      prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
+      return tf.nn.embedding_lookup(self.embedding, prev_symbol)
+
+    loop_function = None if is_training else predict_char
+
+    outputs, self.final_state = seq2seq.rnn_decoder(inputs, self.initial_state, cell,
+                                                    loop_function=loop_function)
 
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
-    softmax_w = tf.Variable(tf.truncated_normal([rnn_size, vocab_size],
-                                                  stddev=1.0 / math.sqrt(rnn_size)))
-    softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
     with tf.variable_scope("output"):
       self.logits = tf.matmul(output, softmax_w) + softmax_b
@@ -55,7 +59,7 @@ class CharRNN(Model):
                                                  [tf.reshape(self.targets, [-1])],
                                                  [tf.ones([batch_size * seq_length])],
                                                  vocab_size)
-    self.cost = tf.reduce_mean(self.loss)
+    self.cost = tf.reduce_sum(self.loss) / batch_size / seq_length
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
     tvars = tf.trainable_variables()
