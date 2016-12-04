@@ -31,19 +31,17 @@ class CharRNN(Model):
     self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
-    self.initial_state = cell.zero_state(batch_size, tf.float32)
+    self.initial_state = cell.zero_state(batch_size, tf.float64)
 
     with tf.device("/cpu:0"):
       self.embedding = tf.Variable(tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0),
                                    name="embedding")
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
-    outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
-                                                  inputs,
-                                                  time_major=False,
-                                                  swap_memory=True,
-                                                  initial_state=self.initial_state,
-                                                  dtype=tf.float32)
+    outputs, self.final_state = tf.nn.rnn(self.cell,
+                                          inputs,
+                                          initial_state=self.initial_state,
+                                          dtype=tf.float64)
 
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
     softmax_w = tf.Variable(tf.truncated_normal([rnn_size, vocab_size],
