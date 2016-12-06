@@ -47,31 +47,36 @@ class CharRNN(Model):
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.device("/cpu:0"):
-      self.embedding = tf.Variable(tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0),
-                                   name="embedding")
+      self.embedding = tf.get_variable("embedding",
+        initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     with tf.variable_scope('softmax'):
       softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
 
-    outputs, self.final_state = tf.nn.dynamic_rnn(cell, inputs, initial_state=self.initial_state)
-    output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
+    outputs, self.final_state = tf.nn.dynamic_rnn(cell,
+      inputs,
+      time_major=False,
+      swap_memory=True,
+      initial_state=self.initial_state,
+      dtype=tf.float32)
+    outputs = tf.reshape(outputs, [-1, rnn_size])
 
     with tf.variable_scope("output"):
-      self.logits = tf.matmul(output, softmax_w, transpose_b=True) + softmax_b
+      self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
     self.loss = tf.nn.nce_loss(softmax_w,
       softmax_b,
-      output,
+      outputs,
       tf.to_int64(tf.reshape(self.targets, [-1, 1])),
       nce_samples,
       vocab_size)
     self.cost = tf.reduce_mean(self.loss)
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-    self.train_op= tf.train.AdamOptimizer(learning_rate).minimize(self.loss, global_step=self.global_step)
+    self.train_op = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss, global_step=self.global_step)
 
 
 if __name__ == '__main__':
