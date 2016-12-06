@@ -9,7 +9,7 @@ import math
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=128, cell_type='LN_LSTM',
+               layer_depth=2, rnn_size=128, cell_type='LN_LSTM', nce_samples=5,
                seq_length=50, learning_rate=0.01, keep_prob=0.5, is_training=True):
 
     Model.__init__(self)
@@ -52,17 +52,22 @@ class CharRNN(Model):
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     with tf.variable_scope('softmax'):
-      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
+      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
 
     outputs, self.final_state = tf.nn.dynamic_rnn(cell, inputs, initial_state=self.initial_state)
     output = tf.reshape(tf.concat(1, outputs), [-1, rnn_size])
 
     with tf.variable_scope("output"):
-      self.logits = tf.matmul(output, softmax_w) + softmax_b
+      self.logits = tf.matmul(output, softmax_w, transpose_b=True) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
-    self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, tf.reshape(self.targets, [-1]))
+    self.loss = tf.nn.nce_loss(softmax_w,
+      softmax_b,
+      output,
+      tf.to_int64(tf.reshape(self.targets, [-1, 1])),
+      nce_samples,
+      vocab_size)
     self.cost = tf.reduce_mean(self.loss)
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
