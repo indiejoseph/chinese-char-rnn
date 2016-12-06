@@ -20,9 +20,10 @@ flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 0.01, "Learning rate [0.01]")
+flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("keep_prob", 1, "Dropout rate [1]")
 flags.DEFINE_integer("nce_samples", 5, "NCE Loss sample")
+flags.DEFINE_float("grad_clip", 5.0, "Grad clip")
 flags.DEFINE_string("cell_type", "LN_LSTM", "Cell type")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
@@ -141,18 +142,18 @@ def main(_):
       with tf.name_scope('training'):
         train_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                              FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
+                              FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
                               is_training=True)
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                              FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
+                              FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
                               is_training=False)
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
                                FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                               1, FLAGS.learning_rate, FLAGS.keep_prob,
+                               1, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
                                is_training=False)
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)

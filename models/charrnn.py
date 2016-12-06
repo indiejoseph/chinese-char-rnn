@@ -10,7 +10,7 @@ import math
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=128, cell_type='LN_LSTM', nce_samples=5,
-               seq_length=50, learning_rate=0.01, keep_prob=0.5, is_training=True):
+               seq_length=50, learning_rate=1, keep_prob=0.5, grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
 
@@ -76,7 +76,10 @@ class CharRNN(Model):
     self.cost = tf.reduce_mean(self.loss)
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-    self.train_op = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss, global_step=self.global_step)
+    tvars = tf.trainable_variables()
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
+    self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
 
 if __name__ == '__main__':
