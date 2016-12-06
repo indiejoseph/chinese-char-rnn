@@ -1,7 +1,6 @@
 import sys
 from base import Model
 import tensorflow as tf
-from tensorflow.python.ops import rnn_cell, seq2seq
 from lncell import LayerNormalizedLSTMCell
 import numpy as np
 import math
@@ -41,7 +40,7 @@ class CharRNN(Model):
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
-    self.cell = cell = rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
+    self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
     self.initial_state = cell.zero_state(batch_size, tf.float32)
@@ -52,7 +51,8 @@ class CharRNN(Model):
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     with tf.variable_scope('softmax'):
-      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size])
+      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
+        initializer=tf.contrib.layers.xavier_initializer(uniform=True))
       softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
 
     outputs, self.final_state = tf.nn.dynamic_rnn(cell,
