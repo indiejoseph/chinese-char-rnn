@@ -5,6 +5,7 @@ import time
 import codecs
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib.tensorboard.plugins import projector
 import cPickle
 import pprint
 import string
@@ -135,6 +136,9 @@ def main(_):
   valid_size = 50
   valid_window = 100
 
+  # Format: tensorflow/contrib/tensorboard/plugins/projector/projector_config.proto
+  config = projector.ProjectorConfig()
+
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
 
@@ -144,6 +148,12 @@ def main(_):
                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
                               FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
                               is_training=True)
+        embedding = config.embedding.add()
+        embedding.tensor_name = train_model.embedding.name
+        # Link this tensor to its metadata file (e.g. labels).
+        # embedding.metadata_path = os.path.join(
+        #   os.path.join(FLAGS.data_dir, 'news/metadata.tsv'))
+
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
         valid_model = CharRNN(vocab_size, FLAGS.batch_size,
@@ -158,6 +168,10 @@ def main(_):
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
+
+    # projector
+    projector.visualize_embeddings(train_writer, config)
+
     tf.initialize_all_variables().run()
 
     if FLAGS.sample:
@@ -253,8 +267,8 @@ def main(_):
 
           current_step = tf.train.global_step(sess, train_model.global_step)
 
-      train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-      print "model saved to {}".format(FLAGS.checkpoint_dir)
+        train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
+        print "model saved to {}".format(FLAGS.checkpoint_dir)
 
 
 if __name__ == '__main__':
