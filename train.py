@@ -139,7 +139,6 @@ def main(_):
 
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
-    sess.run(init_op)
 
     with graph.as_default():
       with tf.name_scope('training'):
@@ -163,6 +162,8 @@ def main(_):
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
+
+    sess.run(init_op)
 
     if FLAGS.sample:
       # load checkpoints
