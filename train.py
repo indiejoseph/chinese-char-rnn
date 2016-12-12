@@ -133,7 +133,6 @@ def main(_):
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
   graph = tf.Graph()
-  init_op = tf.global_variables_initializer()
   valid_size = 50
   valid_window = 100
 
@@ -163,7 +162,7 @@ def main(_):
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
 
-    sess.run(init_op)
+    tf.global_variables_initializer().run()
 
     if FLAGS.sample:
       # load checkpoints
