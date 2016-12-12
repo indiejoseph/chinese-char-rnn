@@ -132,36 +132,30 @@ def main(_):
   data_loader = TextLoader(os.path.join(FLAGS.data_dir, FLAGS.dataset_name),
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
-  graph = tf.Graph()
   valid_size = 50
   valid_window = 100
 
-  with tf.Session(graph=graph) as sess:
-    graph_info = sess.graph
+  with tf.name_scope('training'):
+    train_model = CharRNN(vocab_size, FLAGS.batch_size,
+                          FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
+                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                          is_training=True)
 
-    with graph.as_default():
-      with tf.name_scope('training'):
-        train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                              FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
-                              is_training=True)
+  tf.get_variable_scope().reuse_variables()
 
-      tf.get_variable_scope().reuse_variables()
-      with tf.name_scope('validation'):
-        valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                              FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                              FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
-                              is_training=False)
+  with tf.name_scope('validation'):
+    valid_model = CharRNN(vocab_size, FLAGS.batch_size,
+                          FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
+                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                          is_training=False)
 
-      with tf.name_scope('sample'):
-        simple_model = CharRNN(vocab_size, 1,
-                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                               1, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
-                               is_training=False)
+  with tf.name_scope('sample'):
+    simple_model = CharRNN(vocab_size, 1,
+                           FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
+                           1, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                           is_training=False)
 
-    train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
-    valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
-
+  with tf.Session() as sess:
     tf.global_variables_initializer().run()
 
     if FLAGS.sample:
@@ -219,15 +213,8 @@ def main(_):
               valid_costs += res["cost"]
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
-            valid_writer.add_summary(tf.scalar_summary("valid_perplexity", valid_perplexity).eval(), current_step)
-            valid_writer.flush()
-
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
-
-            # write summary
-            train_writer.add_summary(tf.scalar_summary("train_perplexity", train_perplexity).eval(), current_step)
-            train_writer.flush()
 
             # Write a similarity log
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
