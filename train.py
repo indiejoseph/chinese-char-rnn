@@ -133,14 +133,13 @@ def main(_):
                            FLAGS.batch_size, FLAGS.seq_length)
   vocab_size = data_loader.vocab_size
   graph = tf.Graph()
+  init_op = tf.global_variables_initializer()
   valid_size = 50
   valid_window = 100
 
-  # Format: tensorflow/contrib/tensorboard/plugins/projector/projector_config.proto
-  config = projector.ProjectorConfig()
-
   with tf.Session(graph=graph) as sess:
     graph_info = sess.graph
+    sess.run(init_op)
 
     with graph.as_default():
       with tf.name_scope('training'):
@@ -164,8 +163,6 @@ def main(_):
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
-
-    tf.initialize_all_variables().run()
 
     if FLAGS.sample:
       # load checkpoints
