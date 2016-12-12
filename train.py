@@ -148,11 +148,6 @@ def main(_):
                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
                               FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
                               is_training=True)
-        embedding = config.embedding.add()
-        embedding.tensor_name = train_model.embedding.name
-        # Link this tensor to its metadata file (e.g. labels).
-        # embedding.metadata_path = os.path.join(
-        #   os.path.join(FLAGS.data_dir, 'news/metadata.tsv'))
 
       tf.get_variable_scope().reuse_variables()
       with tf.name_scope('validation'):
@@ -160,6 +155,7 @@ def main(_):
                               FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
                               FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
                               is_training=False)
+
       with tf.name_scope('sample'):
         simple_model = CharRNN(vocab_size, 1,
                                FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
@@ -168,9 +164,6 @@ def main(_):
 
     train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/training', graph_info)
     valid_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/validate', graph_info)
-
-    # projector
-    projector.visualize_embeddings(train_writer, config)
 
     tf.initialize_all_variables().run()
 
