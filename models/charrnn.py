@@ -8,7 +8,7 @@ import math
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               rnn_size=128, cell_type='PLSTM', nce_samples=5,
+               layer_depth=2, rnn_size=128, cell_type='PLSTM', nce_samples=5,
                seq_length=50, learning_rate=1, keep_prob=0.5, grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
@@ -30,9 +30,6 @@ class CharRNN(Model):
 
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob)
-
-    if is_training and keep_prob < 1:
-      cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
