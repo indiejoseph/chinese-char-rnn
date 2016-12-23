@@ -1,14 +1,14 @@
 import sys
 from base import Model
 import tensorflow as tf
-from lncell import LayerNormalizedLSTMCell
+from plstmCell import PhasedLSTMCell, multiPLSTM
 import numpy as np
 import math
 
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=128, cell_type='LN_LSTM', nce_samples=5,
+               rnn_size=128, cell_type='PLSTM', nce_samples=5,
                seq_length=50, learning_rate=1, keep_prob=0.5, grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
@@ -17,30 +17,23 @@ class CharRNN(Model):
 
     # RNN
     self.rnn_size = rnn_size
-    self.layer_depth = layer_depth
     self.keep_prob = keep_prob
 
     if cell_type == 'GRU':
       cell = tf.nn.rnn_cell.GRUCell(rnn_size)
     elif cell_type == 'LSTM':
       cell = tf.nn.rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
-    elif cell_type == 'LN_LSTM':
-      cell = LayerNormalizedLSTMCell(rnn_size)
+    elif cell_type == 'PLSTM':
+      cell = PhasedLSTMCell(rnn_size)
     else:
       cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
 
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob)
 
-    if cell_type == 'LSTM' or cell_type == 'LN_LSTM':
-      cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
-    else:
-      cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth)
-
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
-    self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
     self.input_data = tf.placeholder(tf.int64, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int64, [batch_size, seq_length], name="targets")
     self.initial_state = cell.zero_state(batch_size, tf.float32)
