@@ -238,7 +238,7 @@ def main(_):
           print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost / FLAGS.seq_length, (valid_cost / data_loader.num_valid_batches), train_perplexity, valid_perplexity,
+                      e, (train_cost / FLAGS.seq_length), (valid_cost / data_loader.num_valid_batches / FLAGS.seq_length), train_perplexity, valid_perplexity,
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
