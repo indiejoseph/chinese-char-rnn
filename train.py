@@ -197,7 +197,7 @@ def main(_):
           state = res["final_state"]
           train_iters += 1
           train_costs += train_cost
-          train_perplexity = np.exp(train_costs / train_iters)
+          train_perplexity = np.exp(train_costs / (train_iters * FLAGS.seq_length))
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = None
@@ -210,7 +210,7 @@ def main(_):
               valid_iters += 1
               valid_cost += res["cost"]
               valid_costs += res["cost"]
-              valid_perplexity = np.exp(valid_costs / valid_iters)
+              valid_perplexity = np.exp(valid_costs / (valid_iters * FLAGS.seq_length))
 
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)

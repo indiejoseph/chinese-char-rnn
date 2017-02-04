@@ -30,14 +30,15 @@ class CharRNN(Model):
     elif cell_type == 'LSTM':
       cell = tf.nn.rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
     elif cell_type == 'RHM':
-      cell = LayerNormHighwayRNNCell(rnn_size)
+      cell = LayerNormHighwayRNNCell(rnn_size, layer_depth)
     else:
       cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
 
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob)
 
-    self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
+    if layer_depth > 1 and cell_type is not 'RHM':
+      self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
 
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
@@ -57,21 +58,21 @@ class CharRNN(Model):
       swap_memory=True,
       initial_state=self.initial_state,
       dtype=tf.float32)
-    outputs = tf.reshape(outputs, [-1, rnn_size])
+    output = tf.reshape(outputs, [-1, rnn_size])
 
     with tf.variable_scope('softmax'):
       softmax_w = tf.transpose(self.embedding) # weight tying
       softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
 
     with tf.variable_scope("output"):
-      self.logits = tf.matmul(outputs, softmax_w) + softmax_b
+      self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
     labels = tf.reshape(self.targets, [-1])
 
-    self.loss, training_losses = adaptive_softmax_loss(outputs,
+    self.loss, training_losses = adaptive_softmax_loss(output,
         labels, adaptive_softmax_cutoff)
-    self.cost = tf.reduce_mean(self.loss)
+    self.cost = tf.reduce_sum(self.loss) / batch_size
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
     tvars = tf.trainable_variables()
