@@ -1,7 +1,7 @@
 import sys
 from base import Model
 import tensorflow as tf
-from lncell import LayerNormalizedLSTMCell
+from lm_rhm_cell import LayerNormHighwayRNNCell
 import numpy as np
 import math
 
@@ -24,8 +24,8 @@ class CharRNN(Model):
       cell = tf.nn.rnn_cell.GRUCell(rnn_size)
     elif cell_type == 'LSTM':
       cell = tf.nn.rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
-    elif cell_type == 'LN_LSTM':
-      cell = LayerNormalizedLSTMCell(rnn_size)
+    elif cell_type == 'RHM':
+      cell = LayerNormHighwayRNNCell(rnn_size)
     else:
       cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
 
@@ -46,11 +46,6 @@ class CharRNN(Model):
         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
-    with tf.variable_scope('softmax'):
-      softmax_w = tf.get_variable("softmax_w", [vocab_size, rnn_size],
-        initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-      softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
-
     outputs, self.final_state = tf.nn.dynamic_rnn(cell,
       inputs,
       time_major=False,
@@ -58,6 +53,10 @@ class CharRNN(Model):
       initial_state=self.initial_state,
       dtype=tf.float32)
     outputs = tf.reshape(outputs, [-1, rnn_size])
+
+    with tf.variable_scope('softmax'):
+      softmax_w = self.embedding # weight tying
+      softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
 
     with tf.variable_scope("output"):
       self.logits = tf.matmul(outputs, softmax_w, transpose_b=True) + softmax_b
