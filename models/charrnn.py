@@ -10,7 +10,7 @@ from adaptive_softmax import adaptive_softmax_loss
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=128, cell_type='LN_LSTM',
+               layer_depth=2, num_units=1000, rnn_size=100, cell_type='LN_LSTM',
                seq_length=50, learning_rate=1, keep_prob=0.5, grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
@@ -19,6 +19,7 @@ class CharRNN(Model):
 
     # RNN
     self.rnn_size = rnn_size
+    self.num_units = num_units
     self.layer_depth = layer_depth
     self.keep_prob = keep_prob
 
@@ -43,13 +44,15 @@ class CharRNN(Model):
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
+    cell = tf.nn.rnn_cell.OutputProjectionWrapper(cell, num_units)
+
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.device("/cpu:0"):
       self.embedding = tf.get_variable("embedding",
-        initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
+        initializer=tf.random_uniform([vocab_size, num_units], -1.0, 1.0))
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(cell,
@@ -58,7 +61,7 @@ class CharRNN(Model):
       swap_memory=True,
       initial_state=self.initial_state,
       dtype=tf.float32)
-    output = tf.reshape(outputs, [-1, rnn_size])
+    output = tf.reshape(outputs, [-1, num_units])
 
     with tf.variable_scope('softmax'):
       softmax_w = tf.transpose(self.embedding) # weight tying
