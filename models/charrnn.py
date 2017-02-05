@@ -4,7 +4,7 @@ import numpy as np
 import math
 
 from base import Model
-from lm_rhm_cell import LayerNormHighwayRNNCell
+from hm_rnn import HmGruCell, MultiHmRNNCell
 from adaptive_softmax import adaptive_softmax_loss
 
 
@@ -29,16 +29,19 @@ class CharRNN(Model):
       cell = tf.nn.rnn_cell.GRUCell(rnn_size)
     elif cell_type == 'LSTM':
       cell = tf.nn.rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
-    elif cell_type == 'RHM':
-      cell = LayerNormHighwayRNNCell(rnn_size, layer_depth)
+    elif cell_type == 'HM':
+      cell = HmGruCell(rnn_size)
     else:
       cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
 
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob)
 
-    if layer_depth > 1 and cell_type is not 'RHM':
-      self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
+    if layer_depth > 1:
+      if cell_type is not 'HM':
+        self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
+      else:
+        self.cell = cell = MultiHmRNNCell([cell] * layer_depth, rnn_size)
 
     if is_training and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
