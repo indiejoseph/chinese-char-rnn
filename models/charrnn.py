@@ -10,7 +10,7 @@ from adaptive_softmax import adaptive_softmax_loss
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, num_units=1000, rnn_size=100, cell_type='LN_LSTM',
+               layer_depth=2, num_units=1000, rnn_size=100, cell_type='RHM',
                seq_length=50, learning_rate=1, keep_prob=0.5, grad_clip=5.0, is_training=True):
 
     Model.__init__(self)

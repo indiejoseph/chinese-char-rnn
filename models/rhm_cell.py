@@ -74,7 +74,8 @@ class HighwayGRUCell(rnn_cell.RNNCell):
         r, u = array_ops.split(1, 2, _linear([inputs, new_h],
                                              2 * self._num_units, True, 1.0))
         if self.use_layer_norm:
-          r, u = layer_norm(r, scope="reset"), layer_norm(u, scope="update")
+          r = layer_norm(r, scope="reset")
+          u = layer_norm(u, scope="update")
 
         r, u = sigmoid(r), sigmoid(u)
 
@@ -85,10 +86,12 @@ class HighwayGRUCell(rnn_cell.RNNCell):
           c = _linear([new_h], self._num_units, True)
 
         if self.use_layer_norm:
-          c = tf.tanh(layer_norm(c))
+          c = layer_norm(c)
 
         if self.use_recurrent_dropout:
-          c = tf.nn.dropout(c, self.dropout_keep_prob)
+          c = tf.nn.dropout(tf.tanh(c), self.dropout_keep_prob)
+        else:
+          c = tf.tanh(c)
 
       new_h = u * state + (1 - u) * c
 
