@@ -11,7 +11,7 @@ from adaptive_softmax import adaptive_softmax_loss
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, num_units=1000, rnn_size=100, cell_type='RHM',
-               seq_length=50, learning_rate=1, keep_prob=0.5, grad_clip=5.0, is_training=True):
+               seq_length=50, learning_rate=0.2, keep_prob=0.5, grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
 
@@ -34,17 +34,17 @@ class CharRNN(Model):
       cell = HighwayGRUCell(rnn_size, layer_depth,
                             use_layer_norm=True,
                             dropout_keep_prob=keep_prob,
-                            use_recurrent_dropout=True)
+                            use_recurrent_dropout=is_training)
     else:
       cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
 
-    if is_training and keep_prob < 1:
+    if is_training and cell_type is not 'RHM' and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob)
 
     if layer_depth > 1 and cell_type is not 'RHM':
       self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
 
-    if is_training and keep_prob < 1:
+    if is_training and cell_type is not 'RHM' and keep_prob < 1:
       cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
     cell = tf.nn.rnn_cell.OutputProjectionWrapper(cell, num_units)
