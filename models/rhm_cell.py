@@ -9,35 +9,62 @@ from tensorflow.python.ops import array_ops
 
 _linear = tf.nn.seq2seq.linear
 
-# support functions for layer norm
-def moments_for_layer_norm(x, axes=1, name=None):
-  #output for mean and variance should be [batch_size]
-  # from https://github.com/LeavesBreathe/tensorflow_with_latest_papers
-  epsilon = 1e-3 # found this works best.
-  if not isinstance(axes, list): axes = list(axes)
-  with tf.name_scope("moments", name, [x, axes]):
-    mean = tf.reduce_mean(x, axes, keep_dims=True)
-    variance = tf.sqrt(tf.reduce_mean(tf.square(x-mean), axes, keep_dims=True)+epsilon)
-    return mean, variance
-
-def layer_norm(input_tensor, scope="layer_norm", alpha_start=1.0, bias_start=0.0):
-  # derived from:
-  # https://github.com/LeavesBreathe/tensorflow_with_latest_papers, but simplified.
+def layer_norm(input_tensor, num_variables_in_tensor = 1, initial_bias_value = 0.0, scope = "layer_norm"):
   with tf.variable_scope(scope):
+    '''for clarification of shapes:
+    input_tensor = [batch_size, num_neurons]
+    mean = [batch_size]
+    variance = [batch_size]
+    alpha = [num_neurons]
+    bias = [num_neurons]
+    output = [batch_size, num_neurons]
+    '''
     input_tensor_shape_list = input_tensor.get_shape().as_list()
-    num_units = input_tensor_shape_list[1]
 
-    alpha = tf.get_variable('layer_norm_alpha', [num_units],
-      initializer=tf.constant_initializer(alpha_start))
-    bias = tf.get_variable('layer_norm_bias', [num_units],
-      initializer=tf.constant_initializer(bias_start))
+    num_neurons = input_tensor_shape_list[1]/num_variables_in_tensor
 
-    mean, variance = moments_for_layer_norm(input_tensor,
-      axes=[1], name = "moments_"+scope)
-    output = (alpha * (input_tensor-mean))/(variance)+bias
 
-  return output
 
+    alpha = tf.get_variable('layer_norm_alpha', [num_neurons * num_variables_in_tensor],
+            initializer = tf.constant_initializer(1.0))
+
+    bias = tf.get_variable('layer_norm_bias', [num_neurons * num_variables_in_tensor],
+            initializer = tf.constant_initializer(initial_bias_value))
+
+    if num_variables_in_tensor == 1:
+      input_tensor_list = [input_tensor]
+      alpha_list = [alpha]
+      bias_list = [bias]
+
+    else:
+      input_tensor_list = tf.split(1, num_variables_in_tensor, input_tensor)
+      alpha_list = tf.split(0, num_variables_in_tensor, alpha)
+      bias_list = tf.split(0, num_variables_in_tensor, bias)
+
+    list_of_layer_normed_results = []
+    for counter in xrange(num_variables_in_tensor):
+      mean, variance = moments_for_layer_norm(input_tensor_list[counter], axes = [1], name = "moments_loopnum_"+str(counter)+scope) #average across layer
+
+      output = (alpha_list[counter] * (input_tensor_list[counter] - mean)) / variance + bias_list[counter]
+
+      list_of_layer_normed_results.append(output)
+
+    if num_variables_in_tensor == 1:
+      return list_of_layer_normed_results[0]
+    else:
+      return tf.concat(1, list_of_layer_normed_results)
+
+def moments_for_layer_norm(x, axes = 1, name = None, epsilon = 0.001):
+  '''output for mean and variance should be [batch_size]'''
+
+  if not isinstance(axes, list): axes = list(axes)
+
+  with tf.name_scope("moments", name, [x, axes]):
+    mean = tf.reduce_mean(x, axes, keep_dims = True)
+
+    variance = tf.sqrt(tf.reduce_mean(tf.square(x - mean), axes, keep_dims = True) + epsilon)
+
+    return mean, variance
 
 class HighwayGRUCell(rnn_cell.RNNCell):
   """Highway GRU Network"""
@@ -93,7 +120,7 @@ class HighwayGRUCell(rnn_cell.RNNCell):
         else:
           c = tf.tanh(c)
 
-      new_h = u * state + (1 - u) * c
+      new_h = u * new_h + (1 - u) * c
 
     return new_h, new_h
 
