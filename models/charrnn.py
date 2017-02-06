@@ -4,7 +4,7 @@ import numpy as np
 import math
 
 from base import Model
-from lm_rhm_cell import LayerNormHighwayRNNCell
+from rhm_cell import HighwayGRUCell
 from adaptive_softmax import adaptive_softmax_loss
 
 
@@ -31,7 +31,10 @@ class CharRNN(Model):
     elif cell_type == 'LSTM':
       cell = tf.nn.rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
     elif cell_type == 'RHM':
-      cell = LayerNormHighwayRNNCell(rnn_size, layer_depth)
+      cell = HighwayGRUCell(rnn_size, layer_depth,
+                            use_layer_norm=True,
+                            dropout_keep_prob=keep_prob,
+                            use_recurrent_dropout=True)
     else:
       cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
 
