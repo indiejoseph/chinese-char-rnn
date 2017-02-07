@@ -36,14 +36,14 @@ class CharRNN(Model):
       else:
         cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
 
-      if is_training and keep_prob < 1:
+      if is_training and keep_prob < 1 and cell_type != 'HM':
         cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob)
 
       if layer_depth > 1:
         if cell_type != 'HM':
           self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
         else:
-          self.cell = cell = PredictiveMultiRNNCell([cell] * layer_depth, rnn_size)
+          self.cell = cell = PredictiveMultiRNNCell([cell] * layer_depth, state_is_tuple=True, keep_prob=keep_prob)
 
     with tf.variable_scope(scope or 'CharRnn'):
       self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")

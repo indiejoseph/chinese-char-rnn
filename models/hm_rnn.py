@@ -46,7 +46,7 @@ class AttnGRUCell(tf.nn.rnn_cell.RNNCell):
     return new_h, new_h
 
 class PredictiveMultiRNNCell(tf.nn.rnn_cell.RNNCell):
-  def __init__(self, cells, state_is_tuple=True):
+  def __init__(self, cells, state_is_tuple=True, keep_prob=0.9):
     """Create a RNN cell composed sequentially of a number of RNNCells.
     Args:
       cells: list of RNNCells that will be composed in this order.
@@ -62,6 +62,7 @@ class PredictiveMultiRNNCell(tf.nn.rnn_cell.RNNCell):
       raise ValueError("Must specify at least one cell for MultiRNNCell.")
     self._cells = cells
     self._state_is_tuple = state_is_tuple
+    self._keep_prob = keep_prob
     if not state_is_tuple:
       if any(nest.is_sequence(c.state_size) for c in self._cells):
         raise ValueError("Some cells return tuples of states, but the flag "
@@ -121,6 +122,9 @@ class PredictiveMultiRNNCell(tf.nn.rnn_cell.RNNCell):
           attention = sigmoid(tf.reduce_sum(gating_unit_weight * h_prev_top))
 
           new_h, new_state = cell(cur_inp, cur_state, attention)
+
+          if self._keep_prob < 1:
+            new_h = tf.nn.dropout(new_h, self._keep_prob)
 
           new_h_list.append(new_h)
           new_states.append(new_state)
