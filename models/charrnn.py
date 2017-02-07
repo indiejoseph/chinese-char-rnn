@@ -55,6 +55,9 @@ class CharRNN(Model):
           initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
+      if keep_prob < 1:
+        inputs = tf.nn.dropout(inputs, keep_prob)
+
       outputs, self.final_state = tf.nn.dynamic_rnn(self.cell,
         inputs,
         time_major=False,
@@ -75,7 +78,7 @@ class CharRNN(Model):
 
       self.loss, training_losses = adaptive_softmax_loss(output,
           labels, adaptive_softmax_cutoff)
-      self.cost = tf.reduce_sum(self.loss) / batch_size
+      self.cost = tf.reduce_sum(self.loss)
       self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
       tf.summary.scalar("cost", self.cost)

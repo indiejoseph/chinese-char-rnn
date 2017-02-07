@@ -144,12 +144,12 @@ def main(_):
 
   valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type,
-                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                          FLAGS.seq_length, FLAGS.learning_rate, 1, FLAGS.grad_clip,
                           is_training=False, scope="validation")
 
   simple_model = CharRNN(vocab_size, 1,
                            FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type,
-                           1, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                           1, FLAGS.learning_rate, 1, FLAGS.grad_clip,
                            is_training=False, scope="sample")
 
   with tf.Session() as sess:
@@ -239,10 +239,13 @@ def main(_):
             text_file.close()
 
           # print log
+          print data_loader.num_valid_batches
           print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, (train_cost / FLAGS.seq_length), (valid_cost / data_loader.num_valid_batches / FLAGS.seq_length), train_perplexity, valid_perplexity,
+                      e, (train_cost / FLAGS.seq_length / FLAGS.batch_size),
+                      (valid_cost / (FLAGS.batch_size * data_loader.num_valid_batches) / FLAGS.seq_length),
+                      train_perplexity, valid_perplexity,
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
