@@ -22,8 +22,7 @@ class CharRNN(Model):
     self.layer_depth = layer_depth
     self.keep_prob = keep_prob
 
-    adaptive_softmax_cutoff = [3000, vocab_size]
-    adagrad_eps = 1e-5
+    adaptive_softmax_cutoff = [2000, vocab_size]
     initializer = tf.contrib.layers.xavier_initializer()
 
     with tf.variable_scope("rnn", initializer=initializer):
