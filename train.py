@@ -17,11 +17,11 @@ pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("rnn_size", 128, "The dimension of char embedding matrix [128]")
-flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
-flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
-flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", .1, "Learning rate [.1]")
+flags.DEFINE_integer("rnn_size", 100, "The dimension of char embedding matrix [100]")
+flags.DEFINE_integer("layer_depth", 3, "Number of layers for RNN")
+flags.DEFINE_integer("batch_size", 32, "The size of batch [32]")
+flags.DEFINE_integer("seq_length", 50, "The # of timesteps to unroll for [50]")
+flags.DEFINE_float("learning_rate", .2, "Learning rate [.2]")
 flags.DEFINE_float("keep_prob", 1, "Dropout rate [1]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip")
 flags.DEFINE_string("cell_type", "HM", "Cell type")
@@ -107,13 +107,16 @@ def run_epochs(sess, x, y, state, model, is_training=True):
 
   if is_training:
     extra_op = model.train_op
+    summary_str = model.merged_summary_op
   else:
     extra_op = tf.no_op()
+    summary_str = tf.no_op()
 
   fetchs = {
     "final_state": model.final_state,
     "cost": model.cost,
-    "extra_op": extra_op
+    "extra_op": extra_op,
+    "summary_str": summary_str
   }
 
   res = sess.run(fetchs, feed)
@@ -134,28 +137,25 @@ def main(_):
   valid_size = 50
   valid_window = 100
 
-  with tf.name_scope('training'):
-    train_model = CharRNN(vocab_size, FLAGS.batch_size,
+  train_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type,
                           FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
-                          is_training=True)
+                          is_training=True, scope="training")
 
-  tf.get_variable_scope().reuse_variables()
-
-  with tf.name_scope('validation'):
-    valid_model = CharRNN(vocab_size, FLAGS.batch_size,
+  valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type,
                           FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
-                          is_training=False)
+                          is_training=False, scope="validation")
 
-  with tf.name_scope('sample'):
-    simple_model = CharRNN(vocab_size, 1,
+  simple_model = CharRNN(vocab_size, 1,
                            FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type,
                            1, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
-                           is_training=False)
+                           is_training=False, scope="sample")
 
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
+
+    summary_writer = tf.summary.FileWriter(FLAGS.log_dir, sess.graph)
 
     if FLAGS.sample:
       # load checkpoints
@@ -195,9 +195,13 @@ def main(_):
           res, time_batch = run_epochs(sess, x, y, state, train_model)
           train_cost = res["cost"]
           state = res["final_state"]
+          summary_str = res["summary_str"]
           train_iters += 1
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / (train_iters * FLAGS.seq_length))
+
+          # write summary
+          summary_writer.add_summary(summary_str, current_step)
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = None
