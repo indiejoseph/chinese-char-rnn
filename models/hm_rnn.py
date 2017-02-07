@@ -2,6 +2,11 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
+"""
+Hierarchical Multiscale Recurrent Neural Networks (cf. https://arxiv.org/pdf/1609.01704.pdf)
+Gated Feedback Recurrent Neural Networks (cf. https://arxiv.org/pdf/1502.02367)
+"""
+
 import math
 import tensorflow as tf
 from tensorflow.python.ops.math_ops import tanh, sigmoid

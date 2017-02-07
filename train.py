@@ -250,6 +250,7 @@ def main(_):
         train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
         print "model saved to {}".format(FLAGS.checkpoint_dir)
 
+    summary_writer.close()
 
 if __name__ == '__main__':
   tf.app.run()
