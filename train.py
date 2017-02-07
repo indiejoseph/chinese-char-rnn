@@ -198,7 +198,7 @@ def main(_):
           summary_str = res["summary_str"]
           train_iters += 1
           train_costs += train_cost
-          train_perplexity = np.exp(train_costs / (train_iters * FLAGS.seq_length))
+          train_perplexity = np.exp(train_costs / (train_iters * FLAGS.seq_length * FLAGS.batch_size))
 
           # write summary
           summary_writer.add_summary(summary_str, current_step)
@@ -214,7 +214,7 @@ def main(_):
               valid_iters += 1
               valid_cost += res["cost"]
               valid_costs += res["cost"]
-              valid_perplexity = np.exp(valid_costs / (valid_iters * FLAGS.seq_length))
+              valid_perplexity = np.exp(valid_costs / (valid_iters * FLAGS.seq_length * FLAGS.batch_size))
 
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
