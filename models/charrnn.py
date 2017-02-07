@@ -44,14 +44,13 @@ class CharRNN(Model):
         else:
           self.cell = cell = PredictiveMultiRNNCell([cell] * layer_depth, state_is_tuple=True, keep_prob=keep_prob)
 
-    with tf.variable_scope(scope or 'CharRnn'):
+    with tf.variable_scope(scope or 'CharRNN'):
       self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
       self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
       self.initial_state = self.cell.zero_state(batch_size, tf.float32)
 
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding",
-          initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
+        self.embedding = tf.get_variable("embedding")
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
       if keep_prob < 1:
