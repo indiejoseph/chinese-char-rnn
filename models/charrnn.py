@@ -50,7 +50,8 @@ class CharRNN(Model):
       self.initial_state = self.cell.zero_state(batch_size, tf.float32)
 
       with tf.device("/cpu:0"):
-        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size])
+        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size],
+                                         initializer=tf.truncated_normal_initializer(stddev=0.02))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
       if keep_prob < 1:

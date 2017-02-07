@@ -239,7 +239,6 @@ def main(_):
             text_file.close()
 
           # print log
-          print data_loader.num_valid_batches
           print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
