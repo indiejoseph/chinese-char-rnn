@@ -76,7 +76,7 @@ class AttnGRUCell(tf.nn.rnn_cell.RNNCell):
           h = tanh(h)
 
         # matrix to vector
-        h = tf.squeeze(h, [2])
+        h = tf.squeeze(h, [1])
 
       with tf.variable_scope("Gates"):  # Reset gate and update gate.
         # We start with bias of 1.0 to not reset.
