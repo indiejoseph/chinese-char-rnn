@@ -83,7 +83,7 @@ class CharRNN(Model):
       tf.summary.scalar("cost", self.cost)
 
       tvars = tf.trainable_variables()
-      optimizer = tf.train.AdamOptimizer(learning_rate)
+      optimizer = tf.train.GradientDescentOptimizer(learning_rate)
       tvars = tf.trainable_variables()
       grads = tf.gradients([tf.reduce_sum(loss) / batch_size for loss in training_losses], tvars)
       grads = [tf.clip_by_norm(grad, grad_clip) if grad is not None else grad for grad in grads]
