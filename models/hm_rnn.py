@@ -3,15 +3,22 @@ from __future__ import print_function
 from __future__ import division
 
 """
-Hierarchical Multiscale Recurrent Neural Networks (cf. https://arxiv.org/pdf/1609.01704.pdf)
-Gated Feedback Recurrent Neural Networks (cf. https://arxiv.org/pdf/1502.02367)
+Hierarchical Multiscale Recurrent Neural Networks
+https://arxiv.org/pdf/1609.01704.pdf
+
+Gated Feedback Recurrent Neural Networks
+https://arxiv.org/pdf/1502.02367
+
+Ba et al. Using Fast Weights to Attend to the Recent Past
+https://arxiv.org/abs/1610.06258
 """
 
 import math
 import tensorflow as tf
 from tensorflow.python.ops.math_ops import tanh, sigmoid
 from tensorflow.python.ops import variable_scope as vs
-from tensorflow.python.platform import tf_logging as logging
+from tensorflow.contrib.layers.python.layers  import layer_norm
+from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.util import nest
 
@@ -20,30 +27,74 @@ _linear = tf.nn.seq2seq.linear
 class AttnGRUCell(tf.nn.rnn_cell.RNNCell):
   """Attention-based Gated Recurrent Unit cell (cf. https://arxiv.org/abs/1603.01417)."""
 
-  def __init__(self, num_units):
+  def __init__(self, num_units, loop_steps=1, layer_norm=True, learning_rate=0.5, decay_rate=0.9):
     self._num_units = num_units
+    self._loop_steps = loop_steps
+    self._layer_norm = layer_norm
+    self._S = loop_steps
+    self._eta = learning_rate
+    self._lambda = decay_rate
 
   @property
   def state_size(self):
-    return self._num_units
+    return self._num_units + (self._num_units * self._num_units)
 
   @property
   def output_size(self):
     return self._num_units
 
+  def _norm(self, inp, scope=None):
+    reuse = tf.get_variable_scope().reuse
+    with vs.variable_scope(scope or "Norm") as scope:
+      normalized = layer_norm(inp, reuse=reuse, scope=scope)
+      return normalized
+
   def __call__(self, inputs, state, attention, scope=None):
     """Gated recurrent unit (GRU) with nunits cells."""
+    batch_size = inputs.get_shape().as_list()[0]
+    state, fast_weights = tf.split_v(state, [self._num_units, self._num_units * self._num_units], 1)
+    fast_weights = tf.reshape(fast_weights, [batch_size, self._num_units, self._num_units])
+    state = tf.reshape(state, [batch_size, self._num_units])
+
     with tf.variable_scope(scope or 'AttnGRUCell'):
+      linear = _linear([inputs, state], self._num_units, True, 1.0)
+
+      with tf.variable_scope("FastWeights"):
+        h = tanh(linear)
+        h = tf.reshape(h, [batch_size, 1, self._num_units])
+
+        # Create the fixed A for this time step
+        fast_weights = self._lambda * fast_weights + self._eta * tf.batch_matmul(
+          tf.transpose(h, [0, 2, 1]), h)
+
+        for i in range(self._S):
+          h = tf.reshape(linear, tf.shape(h)) + tf.batch_matmul(h, fast_weights)
+
+          if self._layer_norm:
+            h = self._norm(h, scope="Norm%d" % (i + 1))
+
+          h = tanh(h)
+
+        # matrix to vector
+        h = tf.squeeze(h, [2])
+
       with tf.variable_scope("Gates"):  # Reset gate and update gate.
         # We start with bias of 1.0 to not reset.
-        r = sigmoid(_linear([inputs, state], self._num_units, True, 1.0))
+        r = sigmoid(linear)
 
       with tf.variable_scope("Candidate"):
-        c = tanh(_linear([inputs, r * state], self._num_units, True))
+        c = _linear([inputs, r * h], self._num_units, True)
 
-      new_h = attention * c + (1 - attention) * state
+        if self._layer_norm:
+          c = self._norm(c, scope="Norm")
 
-    return new_h, new_h
+        c = tanh(c)
+
+      new_h = attention * c + (1 - attention) * h
+
+    fast_weights = tf.reshape(fast_weights, [batch_size, self._num_units * self._num_units])
+
+    return new_h, tf.concat(1, [new_h, fast_weights])
 
 class PredictiveMultiRNNCell(tf.nn.rnn_cell.RNNCell):
   def __init__(self, cells, state_is_tuple=True, keep_prob=0.9):
@@ -140,15 +191,15 @@ if __name__ == "__main__":
 
   batch = 3
   num_steps = 10
-  dim = 2
+  dim = 100
   inputs = tf.placeholder(tf.float32, [batch, num_steps, dim], name="inputs")
   cell = AttnGRUCell(100)
   cell = PredictiveMultiRNNCell([cell] * 6)
   initial_state = cell.zero_state(batch, tf.float32)
-  state = initial_state
-
-  outputs, state = tf.nn.dynamic_rnn(cell, inputs, initial_state=state)
+  outputs, state = tf.nn.dynamic_rnn(cell, inputs, initial_state=initial_state)
 
   sess = tf.Session()
   sess.run(tf.global_variables_initializer())
   outputs = sess.run(outputs, feed_dict={ inputs: np.random.rand(batch, num_steps, dim) })
+
+  print(outputs)
