@@ -31,7 +31,7 @@ class CharRNN(Model):
       elif cell_type == 'LSTM':
         cell = tf.nn.rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
       elif cell_type == 'HM':
-        cell = AttnGRUCell(rnn_size)
+        cell = AttnGRUCell(rnn_size, 3, layer_norm=is_training)
       else:
         cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
 
