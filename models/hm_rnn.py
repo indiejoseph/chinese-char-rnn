@@ -60,7 +60,7 @@ class AttnGRUCell(tf.nn.rnn_cell.RNNCell):
       linear = _linear([inputs, state], self._num_units, True, 1.0)
 
       with tf.variable_scope("FastWeights"):
-        h = tanh(linear)
+        h = tf.nn.relu(linear)
         h = tf.reshape(h, [batch_size, 1, self._num_units])
 
         # Create the fixed A for this time step
@@ -73,7 +73,7 @@ class AttnGRUCell(tf.nn.rnn_cell.RNNCell):
           if self._layer_norm:
             h = self._norm(h, scope="Norm%d" % (i + 1))
 
-          h = tanh(h)
+          h = tf.nn.relu(h)
 
         # matrix to vector
         h = tf.squeeze(h, [1])
