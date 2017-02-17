@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numbers
 from tensorflow.contrib.layers import xavier_initializer
+from tensorflow.contrib import rnn
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import tensor_util
 from tensorflow.python.ops import array_ops
@@ -62,7 +63,7 @@ def zoneout(x, keep_prob, noise_shape=None, seed=None, name=None):
         return 1. - ret
 
 
-class QRNN_pooling(tf.nn.rnn_cell.RNNCell):
+class QRNN_pooling(rnn.RNNCell):
 
     def __init__(self, out_fmaps, pool_type):
         self.__pool_type = pool_type
