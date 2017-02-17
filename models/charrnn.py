@@ -41,19 +41,10 @@ class CharRNN(Model):
       self.embedding = tf.get_variable("embedding",
         initializer=tf.random_uniform([vocab_size, num_units], -1.0, 1.0))
 
-      chars = tf.split(1, seq_length, tf.expand_dims(self.input_data, -1))
+      inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
-      for char_idx in chars:
-        char_embed = tf.nn.embedding_lookup(self.embedding, char_idx)
-
-        if self.is_training and self.keep_prob < 1:
-          char_embed = tf.nn.dropout(char_embed, self.keep_prob, name='dout_char_emb')
-
-        if inputs is None:
-          inputs = tf.squeeze(char_embed, [1])
-        else:
-          inputs = tf.concat(1, [inputs,
-                                 tf.squeeze(char_embed, [1])])
+      if self.is_training and self.keep_prob < 1:
+        inputs = tf.nn.dropout(inputs, self.keep_prob, name='dout_char_emb')
 
     qrnn_h = inputs
 
