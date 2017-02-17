@@ -1,6 +1,6 @@
 #My pylintrc for use with atom.io's linter-pylint
 [MESSAGES CONTROL]
-disable=W0311,W1201,W0702,W0611,E1101,C0111,C0103,R0902
+disable=W0311,W1201,W0702,W0611,W0621,W0201,E1101,C0111,C0103,R0902
 
 # checks for :
 # * unauthorized constructions

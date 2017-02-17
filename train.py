@@ -23,9 +23,9 @@ flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
 flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("keep_prob", 1, "Dropout rate [1]")
+flags.DEFINE_float("zoneout", 0.9, "Zoneout rate [0.9]")
 flags.DEFINE_integer("nce_samples", 5, "NCE Loss sample")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip")
-flags.DEFINE_string("cell_type", "LN_LSTM", "Cell type")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -45,9 +45,9 @@ def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1
     feed = {model.input_data: x}
 
     if state is not None:
-      feed[model.initial_state] = state
+      feed[model.initial_states] = state
 
-    [state] = sess.run([model.final_state], feed)
+    [state] = sess.run([model.final_states], feed)
 
   def weighted_pick(weights):
     t = np.cumsum(weights)
@@ -60,8 +60,8 @@ def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1
   for _ in xrange(num):
     x = np.zeros((1, 1))
     x[0, 0] = vocab.get(char, 0)
-    feed = {model.input_data: x, model.initial_state: state}
-    [probs, state] = sess.run([model.probs, model.final_state], feed)
+    feed = {model.input_data: x, model.initial_states: state}
+    [probs, state] = sess.run([model.probs, model.final_states], feed)
     p = probs[0]
 
     if sampling_type == 0:
@@ -104,7 +104,8 @@ def run_epochs(sess, x, y, state, model, is_training=True):
   feed = {model.input_data: x, model.targets: y}
 
   if state is not None:
-    feed[model.initial_state] = state
+    for i, s in enumerate(state):
+      feed[model.initial_states[i]] = s
 
   if is_training:
     extra_op = model.train_op
@@ -112,7 +113,7 @@ def run_epochs(sess, x, y, state, model, is_training=True):
     extra_op = tf.no_op()
 
   fetchs = {
-    "final_state": model.final_state,
+    "final_states": model.final_states,
     "cost": model.cost,
     "extra_op": extra_op
   }
@@ -137,22 +138,25 @@ def main(_):
 
   with tf.name_scope('training'):
     train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                          FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                          FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
+                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
+                          FLAGS.zoneout, FLAGS.grad_clip,
                           is_training=True)
 
   tf.get_variable_scope().reuse_variables()
 
   with tf.name_scope('validation'):
     valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                          FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                          FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
+                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
+                          FLAGS.zoneout, FLAGS.grad_clip,
                           is_training=False)
 
   with tf.name_scope('sample'):
     simple_model = CharRNN(vocab_size, 1,
-                           FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.cell_type, FLAGS.nce_samples,
-                           1, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                           FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.nce_samples,
+                           1, FLAGS.learning_rate, FLAGS.keep_prob,
+                           FLAGS.zoneout, FLAGS.grad_clip,
                            is_training=False)
 
   with tf.Session() as sess:
@@ -195,7 +199,7 @@ def main(_):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, state, train_model)
           train_cost = res["cost"]
-          state = res["final_state"]
+          state = res["final_states"]
           train_iters += 1
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
@@ -207,7 +211,7 @@ def main(_):
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
-              valid_state = res["final_state"]
+              valid_state = res["final_states"]
               valid_iters += 1
               valid_cost += res["cost"]
               valid_costs += res["cost"]
