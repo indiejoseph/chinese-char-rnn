@@ -10,7 +10,7 @@ from adaptive_softmax import adaptive_softmax_loss
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=100, num_units=1000,
+               layer_depth=2, rnn_size=100,
                seq_length=50, learning_rate=0.2, keep_prob=0.9,
                grad_clip=5.0, is_training=True):
 
@@ -20,7 +20,6 @@ class CharRNN(Model):
 
     # RNN
     self.rnn_size = rnn_size
-    self.num_units = num_units
     self.layer_depth = layer_depth
     self.keep_prob = keep_prob
     self.batch_size = batch_size
@@ -39,7 +38,7 @@ class CharRNN(Model):
     with tf.variable_scope('rnnlm'):
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding",
-          initializer=tf.random_uniform([vocab_size, num_units], -1.0, 1.0))
+          initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
       if is_training and keep_prob < 1:
