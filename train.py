@@ -17,15 +17,14 @@ pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("rnn_size", 1000, "The dimension of char embedding matrix [1000]")
-flags.DEFINE_integer("num_units", 100, "The dimension of char embedding matrix [100]")
-flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN")
+flags.DEFINE_integer("rnn_size", 100, "The dimension of char embedding matrix [100]")
+flags.DEFINE_integer("layer_depth", 3, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", .1, "Learning rate [.1]")
+flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
 flags.DEFINE_float("keep_prob", 1, "Dropout rate [1]")
+flags.DEFINE_float("zoneout", 0.9, "Zoneout rate [0.9]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip")
-flags.DEFINE_string("cell_type", "RHM", "Cell type")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -137,22 +136,25 @@ def main(_):
 
   with tf.name_scope('training'):
     train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                          FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_size, FLAGS.cell_type,
-                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                          FLAGS.layer_depth, FLAGS.rnn_size,
+                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
+                          FLAGS.zoneout, FLAGS.grad_clip,
                           is_training=True)
 
   tf.get_variable_scope().reuse_variables()
 
   with tf.name_scope('validation'):
     valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                          FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_size, FLAGS.cell_type,
-                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                          FLAGS.layer_depth, FLAGS.rnn_size,
+                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
+                          FLAGS.zoneout, FLAGS.grad_clip,
                           is_training=False)
 
   with tf.name_scope('sample'):
     simple_model = CharRNN(vocab_size, 1,
-                           FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_size, FLAGS.cell_type,
-                           1, FLAGS.learning_rate, FLAGS.keep_prob, FLAGS.grad_clip,
+                           FLAGS.layer_depth, FLAGS.rnn_size,
+                           1, FLAGS.learning_rate, FLAGS.keep_prob,
+                           FLAGS.zoneout, FLAGS.grad_clip,
                            is_training=False)
 
   with tf.Session() as sess:
@@ -198,7 +200,7 @@ def main(_):
           state = res["final_state"]
           train_iters += 1
           train_costs += train_cost
-          train_perplexity = np.exp(train_costs / (train_iters * FLAGS.seq_length))
+          train_perplexity = np.exp(train_costs / train_iters)
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = None
@@ -211,7 +213,7 @@ def main(_):
               valid_iters += 1
               valid_cost += res["cost"]
               valid_costs += res["cost"]
-              valid_perplexity = np.exp(valid_costs / (valid_iters * FLAGS.seq_length))
+              valid_perplexity = np.exp(valid_costs / valid_iters)
 
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
@@ -239,7 +241,7 @@ def main(_):
           print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, (train_cost / FLAGS.seq_length), (valid_cost / data_loader.num_valid_batches / FLAGS.seq_length), train_perplexity, valid_perplexity,
+                      e, train_cost, (valid_cost / data_loader.num_valid_batches), train_perplexity, valid_perplexity,
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)

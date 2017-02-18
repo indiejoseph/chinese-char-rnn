@@ -4,10 +4,9 @@ from __future__ import print_function
 
 import tensorflow as tf
 from tensorflow.python.ops.math_ops import tanh, sigmoid
-from tensorflow.python.ops.nn import rnn_cell
+from tensorflow.contrib import rnn
 from tensorflow.python.ops import array_ops
-
-_linear = tf.nn.seq2seq.linear
+from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
 def layer_norm(input_tensor, num_variables_in_tensor = 1, initial_bias_value = 0.0, scope = "layer_norm"):
   with tf.variable_scope(scope):
@@ -66,7 +65,7 @@ def moments_for_layer_norm(x, axes = 1, name = None, epsilon = 0.001):
 
     return mean, variance
 
-class HighwayGRUCell(rnn_cell.RNNCell):
+class HighwayGRUCell(rnn.RNNCell):
   """Highway GRU Network"""
 
   def __init__(self, num_units,
@@ -98,8 +97,7 @@ class HighwayGRUCell(rnn_cell.RNNCell):
     for highway_layer in xrange(self.num_highway_layers):
 
       with tf.variable_scope('gates_'+str(highway_layer)):
-        r, u = array_ops.split(1, 2, _linear([inputs, new_h],
-                                             2 * self._num_units, True, 1.0))
+        r, u = array_ops.split(_linear([inputs, new_h], 2 * self._num_units, True, 1.0), 2, 1)
         if self.use_layer_norm:
           r = layer_norm(r, scope="reset")
           u = layer_norm(u, scope="update")

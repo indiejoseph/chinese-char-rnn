@@ -81,7 +81,7 @@ def adaptive_softmax_loss(inputs,
                                   math_ops.less(labels, cutoff[i + 1]))
 
       # Update head labels
-      head_labels = math_ops.select(mask, array_ops.constant([cutoff[0] + i] *
+      head_labels = array_ops.where(mask, array_ops.constant([cutoff[0] + i] *
                             sample_num), head_labels)
 
       # Compute tail loss
@@ -89,8 +89,8 @@ def adaptive_softmax_loss(inputs,
       tail_logits = math_ops.matmul(math_ops.matmul(tail_inputs, tail_w[i][0]),
                                     tail_w[i][1])
       tail_labels = array_ops.boolean_mask(labels - cutoff[i], mask)
-      tail_loss = nn.sparse_softmax_cross_entropy_with_logits(tail_logits,
-                                                                  tail_labels)
+      tail_loss = nn.sparse_softmax_cross_entropy_with_logits(logits=tail_logits,
+                                                              labels=tail_labels)
       training_losses.append(tail_loss)
       aligned_tail_loss = sparse_tensor.SparseTensor(
         array_ops.squeeze(array_ops.where(mask)), tail_loss, [sample_num])
@@ -98,8 +98,8 @@ def adaptive_softmax_loss(inputs,
 
     # Compute head loss
     head_logits = math_ops.matmul(inputs, head_w)
-    head_loss = nn.sparse_softmax_cross_entropy_with_logits(head_logits,
-                                                                head_labels)
+    head_loss = nn.sparse_softmax_cross_entropy_with_logits(logits=head_logits,
+                                                            labels=head_labels)
     loss += head_loss
     training_losses.append(head_loss)
 

@@ -10,8 +10,9 @@ from adaptive_softmax import adaptive_softmax_loss
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, num_units=1000, rnn_size=100, cell_type='RHM',
-               seq_length=50, learning_rate=0.2, keep_prob=0.5, grad_clip=5.0, is_training=True):
+               layer_depth=2, rnn_size=100,
+               seq_length=50, learning_rate=0.2, keep_prob=0.5, zoneout=0.9,
+               grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
 
@@ -19,35 +20,16 @@ class CharRNN(Model):
 
     # RNN
     self.rnn_size = rnn_size
-    self.num_units = num_units
     self.layer_depth = layer_depth
     self.keep_prob = keep_prob
+    self.batch_size = batch_size
+    self.seq_length = seq_length
 
     adaptive_softmax_cutoff = [2000, vocab_size]
-    adagrad_eps = 1e-5
-
-    if cell_type == 'GRU':
-      cell = tf.nn.rnn_cell.GRUCell(rnn_size)
-    elif cell_type == 'LSTM':
-      cell = tf.nn.rnn_cell.LSTMCell(rnn_size, state_is_tuple=True)
-    elif cell_type == 'RHM':
-      cell = HighwayGRUCell(rnn_size, layer_depth,
-                            use_layer_norm=True,
-                            dropout_keep_prob=keep_prob,
-                            use_recurrent_dropout=is_training)
-    else:
-      cell = tf.nn.rnn_cell.BasicRNNCell(rnn_size)
-
-    if is_training and cell_type is not 'RHM' and keep_prob < 1:
-      cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob)
-
-    if layer_depth > 1 and cell_type is not 'RHM':
-      self.cell = cell = tf.nn.rnn_cell.MultiRNNCell([cell] * layer_depth, state_is_tuple=True)
-
-    if is_training and cell_type is not 'RHM' and keep_prob < 1:
-      cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
-
-    cell = tf.nn.rnn_cell.OutputProjectionWrapper(cell, num_units)
+    cell = HighwayGRUCell(rnn_size, layer_depth,
+                          use_layer_norm=True,
+                          dropout_keep_prob=keep_prob,
+                          use_recurrent_dropout=is_training)
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
@@ -55,18 +37,19 @@ class CharRNN(Model):
 
     with tf.device("/cpu:0"):
       self.embedding = tf.get_variable("embedding",
-        initializer=tf.random_uniform([vocab_size, num_units], -1.0, 1.0))
+        initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(cell,
-      inputs,
-      time_major=False,
-      swap_memory=True,
-      initial_state=self.initial_state,
-      dtype=tf.float32)
-    output = tf.reshape(outputs, [-1, num_units])
+                                                  inputs,
+                                                  time_major=False,
+                                                  swap_memory=True,
+                                                  initial_state=self.initial_state,
+                                                  dtype=tf.float32)
 
-    with tf.variable_scope('softmax'):
+    output = tf.reshape(outputs, [-1, rnn_size])
+
+    with tf.variable_scope("softmax"):
       softmax_w = tf.transpose(self.embedding) # weight tying
       softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
 
@@ -78,16 +61,18 @@ class CharRNN(Model):
 
     self.loss, training_losses = adaptive_softmax_loss(output,
         labels, adaptive_softmax_cutoff)
-    self.cost = tf.reduce_sum(self.loss) / batch_size
-    self.global_step = tf.Variable(0, name='global_step', trainable=False)
+    self.cost = tf.reduce_mean(
+        tf.reduce_sum(tf.reshape(self.loss, [self.batch_size, -1]), 1)
+      ) / self.seq_length
+    self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
     tvars = tf.trainable_variables()
-    optimizer = tf.train.AdagradOptimizer(learning_rate, adagrad_eps)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
     tvars = tf.trainable_variables()
     grads = tf.gradients([tf.reduce_sum(loss) / batch_size for loss in training_losses], tvars)
     grads = [tf.clip_by_norm(grad, grad_clip) if grad is not None else grad for grad in grads]
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   model = CharRNN()
