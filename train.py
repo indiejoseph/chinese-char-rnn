@@ -21,7 +21,7 @@ flags.DEFINE_integer("rnn_size", 100, "The dimension of char embedding matrix [1
 flags.DEFINE_integer("layer_depth", 5, "Number of layers for RNN")
 flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
 flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
+flags.DEFINE_float("learning_rate", 0.1, "Learning rate [0.1]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
@@ -29,54 +29,8 @@ flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
-flags.DEFINE_string("sample", "", "sample")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
-
-def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1):
-  state = None
-  prime = prime.decode('utf-8')
-
-  for char in prime[:-1]:
-    x = np.zeros((1, 1))
-    x[0, 0] = vocab[char]
-    feed = {model.input_data: x}
-
-    if state is not None:
-      feed[model.initial_state] = state
-
-    [state] = sess.run([model.final_state], feed)
-
-  def weighted_pick(weights):
-    t = np.cumsum(weights)
-    s = np.sum(weights)
-    return int(np.searchsorted(t, np.random.rand(1)*s))
-
-  ret = prime
-  char = prime[-1]
-
-  for _ in xrange(num):
-    x = np.zeros((1, 1))
-    x[0, 0] = vocab.get(char, 0)
-    feed = {model.input_data: x, model.initial_state: state}
-    [probs, state] = sess.run([model.probs, model.final_state], feed)
-    p = probs[0]
-
-    if sampling_type == 0:
-        sample = np.argmax(p)
-    elif sampling_type == 2:
-        if char == ' ':
-            sample = weighted_pick(p)
-        else:
-            sample = np.argmax(p)
-    else: # sampling_type == 1 default:
-        sample = weighted_pick(p)
-
-    pred = chars[sample]
-    ret += pred
-    char = pred
-
-  return ret
 
 
 def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
@@ -149,28 +103,10 @@ def main(_):
                           FLAGS.grad_clip,
                           is_training=False)
 
-  with tf.name_scope('sample'):
-    simple_model = CharRNN(vocab_size, 1,
-                           FLAGS.layer_depth, FLAGS.rnn_size,
-                           1, FLAGS.learning_rate, FLAGS.keep_prob,
-                           FLAGS.grad_clip,
-                           is_training=False)
-
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
 
-    if FLAGS.sample:
-      # load checkpoints
-      if simple_model.load(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name):
-        print " [*] SUCCESS to load model for %s." % FLAGS.dataset_name
-      else:
-        print " [!] Failed to load model for %s." % FLAGS.dataset_name
-        sys.exit(1)
-
-      sample = normalize_unicodes(FLAGS.sample)
-      print gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 200, sample)
-
-    elif FLAGS.export:
+    if FLAGS.export:
       print "Eval..."
       final_embeddings = train_model.embedding.eval(sess)
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
