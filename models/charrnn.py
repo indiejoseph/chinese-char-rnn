@@ -35,39 +35,38 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
-    with tf.device("/cpu:0"):
-      self.embedding = tf.get_variable("embedding",
-        initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
-      inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+    with tf.variable_scope('rnnlm'):
+      with tf.device("/cpu:0"):
+        self.embedding = tf.get_variable("embedding",
+          initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
+        inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
-    if is_training and keep_prob < 1:
-      inputs = tf.nn.dropout(tf.tanh(inputs), self.dropout_keep_prob)
+      if is_training and keep_prob < 1:
+        inputs = tf.nn.dropout(tf.tanh(inputs), self.dropout_keep_prob)
 
-    outputs, self.final_state = tf.nn.dynamic_rnn(cell,
-                                                  inputs,
-                                                  time_major=False,
-                                                  swap_memory=True,
-                                                  initial_state=self.initial_state,
-                                                  dtype=tf.float32)
-
-    output = tf.reshape(outputs, [-1, rnn_size])
-
-    with tf.variable_scope("softmax"):
       softmax_w = tf.transpose(self.embedding) # weight tying
       softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
 
     with tf.variable_scope("output"):
+      outputs, self.final_state = tf.nn.dynamic_rnn(cell,
+                                                    inputs,
+                                                    time_major=False,
+                                                    swap_memory=True,
+                                                    initial_state=self.initial_state,
+                                                    dtype=tf.float32)
+
+      output = tf.reshape(outputs, [-1, rnn_size])
       self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
-    labels = tf.reshape(self.targets, [-1])
+      labels = tf.reshape(self.targets, [-1])
 
-    self.loss, training_losses = adaptive_softmax_loss(output,
-        labels, adaptive_softmax_cutoff)
-    self.cost = tf.reduce_mean(
-        tf.reduce_sum(tf.reshape(self.loss, [self.batch_size, -1]), 1)
-      ) / self.seq_length
-    self.global_step = tf.Variable(0, name="global_step", trainable=False)
+      self.loss, training_losses = adaptive_softmax_loss(output,
+          labels, adaptive_softmax_cutoff)
+      self.cost = tf.reduce_mean(
+          tf.reduce_sum(tf.reshape(self.loss, [self.batch_size, -1]), 1)
+        ) / self.seq_length
+      self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.AdamOptimizer(learning_rate)
