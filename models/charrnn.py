@@ -11,7 +11,7 @@ from adaptive_softmax import adaptive_softmax_loss
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=100,
-               seq_length=50, learning_rate=0.2, keep_prob=0.5, zoneout=0.9,
+               seq_length=50, learning_rate=0.2, keep_prob=0.5,
                grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
@@ -27,7 +27,7 @@ class CharRNN(Model):
 
     adaptive_softmax_cutoff = [2000, vocab_size]
     cell = HighwayGRUCell(rnn_size, layer_depth,
-                          use_layer_norm=True,
+                          use_layer_norm=False,
                           dropout_keep_prob=keep_prob,
                           use_recurrent_dropout=is_training)
 
@@ -39,6 +39,9 @@ class CharRNN(Model):
       self.embedding = tf.get_variable("embedding",
         initializer=tf.random_uniform([vocab_size, rnn_size], -1.0, 1.0))
       inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+
+    if is_training and keep_prob < 1:
+      inputs = tf.nn.dropout(tf.tanh(inputs), self.dropout_keep_prob)
 
     outputs, self.final_state = tf.nn.dynamic_rnn(cell,
                                                   inputs,
