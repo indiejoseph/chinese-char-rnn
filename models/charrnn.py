@@ -11,7 +11,7 @@ from adaptive_softmax import adaptive_softmax_loss
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=100,
-               seq_length=50, learning_rate=0.2, keep_prob=0.9,
+               seq_length=50, learning_rate=1, keep_prob=0.9,
                grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
@@ -42,7 +42,7 @@ class CharRNN(Model):
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
       if is_training and keep_prob < 1:
-        inputs = tf.nn.dropout(tf.tanh(inputs), self.keep_prob)
+        inputs = tf.nn.dropout(inputs, self.keep_prob)
 
       softmax_w = tf.transpose(self.embedding) # weight tying
       softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
