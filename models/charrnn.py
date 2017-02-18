@@ -27,7 +27,7 @@ class CharRNN(Model):
 
     adaptive_softmax_cutoff = [2000, vocab_size]
     cell = HighwayGRUCell(rnn_size, layer_depth,
-                          use_layer_norm=True,
+                          use_layer_norm=False,
                           dropout_keep_prob=keep_prob,
                           use_recurrent_dropout=is_training)
 
