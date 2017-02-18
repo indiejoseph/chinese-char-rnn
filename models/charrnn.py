@@ -42,7 +42,7 @@ class CharRNN(Model):
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
       if is_training and keep_prob < 1:
-        inputs = tf.nn.dropout(tf.tanh(inputs), self.dropout_keep_prob)
+        inputs = tf.nn.dropout(tf.tanh(inputs), self.keep_prob)
 
       softmax_w = tf.transpose(self.embedding) # weight tying
       softmax_b = tf.get_variable("softmax_b", [vocab_size], initializer=tf.constant_initializer(0.0))
