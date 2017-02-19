@@ -1,7 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.ops.math_ops import tanh, sigmoid
 from tensorflow.contrib import rnn
-from multiplicative_intergration import mi_linear
 from tensorflow.python.ops import array_ops
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
@@ -38,7 +37,7 @@ class HighwayGRUCell(rnn.RNNCell):
 
       with tf.variable_scope('h_'+str(highway_layer)):
         if highway_layer == 0:
-          h = mi_linear(inputs, current_state, self._num_units)
+          h = _linear([inputs, current_state], self._num_units, True)
         else:
           h = _linear([current_state], self._num_units, True)
 
@@ -49,7 +48,7 @@ class HighwayGRUCell(rnn.RNNCell):
 
       with tf.variable_scope('t_'+str(highway_layer)):
         if highway_layer == 0:
-          t = tf.sigmoid(mi_linear(inputs, current_state, self._num_units, self.forget_bias))
+          t = tf.sigmoid(_linear([inputs, current_state], self._num_units, True, self.forget_bias))
         else:
           t = tf.sigmoid(_linear([current_state], self._num_units, True, self.forget_bias))
 
