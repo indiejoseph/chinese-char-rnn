@@ -11,19 +11,21 @@ import pprint
 import string
 import sys
 from models.charrnn import CharRNN
-from utils import TextLoader, normalize_unicodes
+from utils import TextLoader
 
 pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("rnn_size", 100, "The dimension of char embedding matrix [100]")
-flags.DEFINE_integer("layer_depth", 5, "Number of layers for RNN")
-flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
-flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 0.1, "Learning rate [0.1]")
-flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
-flags.DEFINE_float("grad_clip", 5.0, "Grad clip")
+flags.DEFINE_integer("rnn_size", 1000, "The dimension of char embedding matrix [1000]")
+flags.DEFINE_integer("num_units", 100, "The dimension of char embedding matrix [100]")
+flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
+flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")
+flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
+flags.DEFINE_float("learning_rate", 0.2, "Learning rate [0.2]")
+flags.DEFINE_float("keep_prob", 0.8, "Dropout rate [0.8]")
+flags.DEFINE_float("grad_clip", 1.0, "Grad clip")
+flags.DEFINE_integer("num_sampled", 70, "NCE sample size") # 100-fold less computation for 7000 vocabs
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -89,18 +91,18 @@ def main(_):
 
   with tf.name_scope('training'):
     train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                          FLAGS.layer_depth, FLAGS.rnn_size,
+                          FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
+                          FLAGS.num_sampled, FLAGS.grad_clip,
                           is_training=True)
 
   tf.get_variable_scope().reuse_variables()
 
   with tf.name_scope('validation'):
     valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                          FLAGS.layer_depth, FLAGS.rnn_size,
+                          FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
+                          FLAGS.num_sampled, FLAGS.grad_clip,
                           is_training=False)
 
   with tf.Session() as sess:
