@@ -27,9 +27,9 @@ class CharRNN(Model):
 
     adaptive_softmax_cutoff = [2000, vocab_size]
     cell = HighwayGRUCell(rnn_size, layer_depth,
-                          use_layer_norm=False,
                           dropout_keep_prob=keep_prob,
-                          use_recurrent_dropout=is_training)
+                          use_recurrent_dropout=True,
+                          is_training=is_training)
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
