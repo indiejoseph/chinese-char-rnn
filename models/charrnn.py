@@ -60,18 +60,18 @@ class CharRNN(Model):
       labels = tf.to_int64(tf.reshape(self.targets, [-1, 1]))
 
       # noise-contrastive estimation
-      nce_weights = tf.get_variable("nce_weights",
-                                    [vocab_size, num_units],
-                                    initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-      nce_biases = tf.get_variable("nce_biases", [vocab_size],
-                                   initializer=tf.constant_initializer(0.0))
+      softmax_weights = tf.get_variable("softmax_weights",
+                                        [vocab_size, num_units],
+                                        initializer=tf.contrib.layers.xavier_initializer(uniform=True))
+      softmax_biases = tf.get_variable("softmax_biases", [vocab_size],
+                                       initializer=tf.constant_initializer(0.0))
 
-      self.loss = tf.nn.nce_loss(weights=nce_weights,
-                                 biases=nce_biases,
-                                 labels=labels,
-                                 inputs=outputs,
-                                 num_sampled=num_sampled,
-                                 num_classes=vocab_size)
+      self.loss = tf.nn.sampled_softmax_loss(weights=softmax_weights,
+                                             biases=softmax_biases,
+                                             labels=labels,
+                                             inputs=outputs,
+                                             num_sampled=num_sampled,
+                                             num_classes=vocab_size)
       self.cost = tf.reduce_mean(self.loss)
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
