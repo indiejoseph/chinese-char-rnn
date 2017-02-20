@@ -46,7 +46,7 @@ class CharRNN(Model):
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
         if keep_prob < 1 and is_training:
-          inputs = tf.nn.dropout(inputs, self.dropout_keep_prob)
+          inputs = tf.nn.dropout(inputs, self.keep_prob)
 
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
