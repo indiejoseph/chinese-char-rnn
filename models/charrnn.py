@@ -5,6 +5,7 @@ import math
 
 from base import Model
 from rhm_cell import HighwayGRUCell
+from adaptive_softmax import adaptive_softmax_loss
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell import OutputProjectionWrapper
 
 
@@ -26,6 +27,7 @@ class CharRNN(Model):
     self.num_units = num_units
     self.seq_length = seq_length
     self.num_sampled = num_sampled
+    self.adaptive_softmax_cutoff = [1000, 2000, vocab_size]
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
@@ -54,44 +56,17 @@ class CharRNN(Model):
                                                     dtype=tf.float32)
 
       outputs = tf.reshape(outputs, [-1, num_units])
-      labels = tf.to_int64(tf.reshape(self.targets, [-1, 1]))
+      labels = tf.reshape(self.targets, [-1])
 
-      # noise-contrastive estimation
-      softmax_weights = tf.get_variable("softmax_weights",
-                                        [vocab_size, num_units],
-                                        initializer=tf.contrib.layers.xavier_initializer(uniform=True))
-      softmax_biases = tf.get_variable("softmax_biases", [vocab_size],
-                                       initializer=tf.constant_initializer(0.0))
-
-      (negative_samples,
-       true_expected_counts,
-       sampled_expected_counts) = tf.nn.learned_unigram_candidate_sampler(labels,
-                                                                          1,
-                                                                          num_sampled,
-                                                                          False,
-                                                                          vocab_size,
-                                                                          seed=None,
-                                                                          name=None)
-      self.loss = tf.nn.sampled_softmax_loss(weights=softmax_weights,
-                                             biases=softmax_biases,
-                                             labels=labels,
-                                             inputs=outputs,
-                                             num_sampled=num_sampled,
-                                             num_classes=vocab_size,
-                                             num_true=1,
-                                             sampled_values=(negative_samples,
-                                                              true_expected_counts,
-                                                              sampled_expected_counts),
-                                             remove_accidental_hits=True,
-                                             partition_strategy='mod',
-                                             name='sampled_softmax_loss')
+      self.loss, training_losses = adaptive_softmax_loss(outputs, labels, self.adaptive_softmax_cutoff)
       self.cost = tf.reduce_mean(self.loss)
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
     tvars = tf.trainable_variables()
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
     tvars = tf.trainable_variables()
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
+    grads = tf.gradients([tf.reduce_sum(loss) / batch_size for loss in training_losses], tvars)
+    grads = [tf.clip_by_norm(grad, grad_clip) if grad is not None else grad for grad in grads]
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
 
