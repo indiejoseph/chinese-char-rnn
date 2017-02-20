@@ -66,12 +66,28 @@ class CharRNN(Model):
       softmax_biases = tf.get_variable("softmax_biases", [vocab_size],
                                        initializer=tf.constant_initializer(0.0))
 
+      (negative_samples,
+       true_expected_counts,
+       sampled_expected_counts) = tf.nn.learned_unigram_candidate_sampler(labels,
+                                                                          1,
+                                                                          num_sampled,
+                                                                          False,
+                                                                          vocab_size,
+                                                                          seed=None,
+                                                                          name=None)
       self.loss = tf.nn.sampled_softmax_loss(weights=softmax_weights,
                                              biases=softmax_biases,
                                              labels=labels,
                                              inputs=outputs,
                                              num_sampled=num_sampled,
-                                             num_classes=vocab_size)
+                                             num_classes=vocab_size,
+                                             num_true=1,
+                                             sampled_values=(negative_samples,
+                                                              true_expected_counts,
+                                                              sampled_expected_counts),
+                                             remove_accidental_hits=True,
+                                             partition_strategy='mod',
+                                             name='sampled_softmax_loss')
       self.cost = tf.reduce_mean(self.loss)
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
