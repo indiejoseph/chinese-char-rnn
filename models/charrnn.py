@@ -61,7 +61,7 @@ class CharRNN(Model):
       outputs = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
       labels = tf.reshape(self.targets, [-1])
 
-      self.loss, training_losses = adaptive_softmax_loss(outputs, labels, self.adaptive_softmax_cutoff)
+      self.loss, _ = adaptive_softmax_loss(outputs, labels, self.adaptive_softmax_cutoff)
       self.cost = tf.reduce_mean(self.loss)
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
