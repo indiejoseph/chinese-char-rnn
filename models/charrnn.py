@@ -58,12 +58,12 @@ class CharRNN(Model):
       outputs = tf.reshape(outputs, [-1, num_units])
       labels = tf.reshape(self.targets, [-1])
 
-      self.loss, _ = adaptive_softmax_loss(outputs, labels, self.adaptive_softmax_cutoff)
+      self.loss, training_losses = adaptive_softmax_loss(outputs, labels, self.adaptive_softmax_cutoff)
       self.cost = tf.reduce_mean(self.loss)
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
     tvars = tf.trainable_variables()
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
+    grads, _ = tf.clip_by_global_norm(tf.gradients([tf.reduce_sum(loss) / batch_size for loss in training_losses], tvars), grad_clip)
     optimizer = tf.train.AdamOptimizer(learning_rate)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
