@@ -5,6 +5,7 @@ import math
 
 from base import Model
 from tensorflow.contrib import rnn
+from rhm_cell import HighwayGRUCell
 from adaptive_softmax import adaptive_softmax_loss
 
 
@@ -31,13 +32,10 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm'):
-      cell = rnn.GRUCell(rnn_size)
-
-      if is_training and keep_prob < 1:
-        cell = rnn.DropoutWrapper(cell, keep_prob)
-
-      if layer_depth > 1:
-        cell = rnn.MultiRNNCell([cell] * layer_depth)
+      cell = HighwayGRUCell(rnn_size, layer_depth,
+                            dropout_keep_prob=keep_prob,
+                            use_recurrent_dropout=True,
+                            is_training=is_training)
 
       cell = rnn.OutputProjectionWrapper(cell, num_units)
 
