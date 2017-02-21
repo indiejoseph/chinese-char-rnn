@@ -4,9 +4,8 @@ import numpy as np
 import math
 
 from base import Model
-from rhm_cell import HighwayGRUCell
+from tensorflow.contrib import rnn
 from adaptive_softmax import adaptive_softmax_loss
-from tensorflow.contrib.rnn.python.ops.core_rnn_cell import OutputProjectionWrapper
 
 
 class CharRNN(Model):
@@ -33,20 +32,21 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm'):
-      cell = HighwayGRUCell(rnn_size, layer_depth,
-                            dropout_keep_prob=keep_prob,
-                            use_recurrent_dropout=True,
-                            is_training=is_training)
-      cell = OutputProjectionWrapper(cell, num_units)
+      cell = rnn.GRUCell(rnn_size)
+
+      if is_training and keep_prob < 1:
+        cell = rnn.DropoutWrapper(cell, keep_prob)
+
+      if layer_depth > 1:
+        cell = rnn.MultiRNNCell([cell] * layer_depth)
+
+      cell = rnn.OutputProjectionWrapper(cell, num_units)
 
       with tf.device("/cpu:0"):
         stdv = np.sqrt(1. / vocab_size)
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units],
                                          initializer=tf.random_uniform_initializer(-stdv, stdv))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
-
-        if keep_prob < 1 and is_training:
-          inputs = tf.nn.dropout(inputs, self.keep_prob)
 
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
