@@ -26,7 +26,7 @@ class CharRNN(Model):
     self.batch_size = batch_size
     self.num_units = num_units
     self.seq_length = seq_length
-    self.adaptive_softmax_cutoff = [2000, vocab_size]
+    self.adaptive_softmax_cutoff = [3000, vocab_size]
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
