@@ -25,7 +25,6 @@ flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
 flags.DEFINE_float("learning_rate", 0.2, "Learning rate [0.2]")
 flags.DEFINE_float("keep_prob", 0.7, "Dropout rate [0.7]")
 flags.DEFINE_float("grad_clip", 1.0, "Grad clip")
-flags.DEFINE_integer("num_sampled", 70, "NCE sample size [70]")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -93,7 +92,7 @@ def main(_):
     train_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
-                          FLAGS.num_sampled, FLAGS.grad_clip,
+                          FLAGS.grad_clip,
                           is_training=True)
 
   tf.get_variable_scope().reuse_variables()
@@ -102,7 +101,7 @@ def main(_):
     valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.rnn_size, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
-                          FLAGS.num_sampled, FLAGS.grad_clip,
+                          FLAGS.grad_clip,
                           is_training=False)
 
   with tf.Session() as sess:

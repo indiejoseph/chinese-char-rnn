@@ -12,7 +12,7 @@ class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=1000, num_units=100,
                seq_length=50, learning_rate=1, keep_prob=0.9,
-               num_sampled=100, grad_clip=5.0, is_training=True):
+               grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
 
@@ -25,7 +25,6 @@ class CharRNN(Model):
     self.batch_size = batch_size
     self.num_units = num_units
     self.seq_length = seq_length
-    self.num_sampled = num_sampled
     self.adaptive_softmax_cutoff = [2000, vocab_size]
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
