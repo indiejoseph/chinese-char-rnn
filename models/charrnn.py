@@ -36,7 +36,6 @@ class CharRNN(Model):
                             use_recurrent_dropout=True,
                             is_training=is_training)
 
-      cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
       cell = rnn.OutputProjectionWrapper(cell, num_units)
 
       with tf.device("/cpu:0"):
@@ -58,10 +57,9 @@ class CharRNN(Model):
       flat_output = tf.reshape(outputs, [-1, num_units])
 
     with tf.variable_scope("loss"):
-      softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      loss = tf.nn.nce_loss(weights=tf.transpose(softmax_w), # .T for some reason
+      loss = tf.nn.nce_loss(weights=self.embedding, # weight tying
                             biases=softmax_b,
                             inputs=flat_output,
                             labels=tf.reshape(self.targets, [-1, 1]), # Column vector
