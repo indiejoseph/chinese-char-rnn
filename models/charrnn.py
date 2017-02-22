@@ -37,6 +37,7 @@ class CharRNN(Model):
                             is_training=is_training)
 
       cell = rnn.OutputProjectionWrapper(cell, num_units)
+      cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
       with tf.device("/cpu:0"):
         stdv = np.sqrt(1. / vocab_size)
