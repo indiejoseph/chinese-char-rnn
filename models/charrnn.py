@@ -11,7 +11,7 @@ from rhm_cell import HighwayGRUCell
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, rnn_size=1000, num_units=100,
-               seq_length=50, learning_rate=1, keep_prob=0.9,
+               seq_length=50, keep_prob=0.9,
                grad_clip=5.0, num_sampled=5., is_training=True):
 
     Model.__init__(self)
@@ -70,9 +70,11 @@ class CharRNN(Model):
       self.cost = tf.reduce_sum(loss) / batch_size / seq_length
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
+    self.lr = tf.Variable(0.0, trainable=False)
+
     tvars = tf.trainable_variables()
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+    optimizer = tf.train.GradientDescentOptimizer(self.lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
 
