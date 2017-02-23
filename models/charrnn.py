@@ -33,8 +33,8 @@ class CharRNN(Model):
     with tf.variable_scope('rnnlm'):
       cell = HighwayGRUCell(rnn_size, layer_depth,
                             dropout_keep_prob=keep_prob,
-                            use_recurrent_dropout=True,
-                            is_training=is_training)
+                            use_recurrent_dropout=is_training,
+                            use_layer_norm=is_training)
 
       cell = rnn.OutputProjectionWrapper(cell, num_units)
 

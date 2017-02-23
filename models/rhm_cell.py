@@ -7,6 +7,19 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
+def _layer_norm(inputs, num_units, epsilon=1e-5, scope="layer_norm"):
+  """ Layer normalizes a 2D tensor along its second axis, which corresponds to batch """
+  input_shape = inputs.get_shape()
+
+  with tf.variable_scope(scope):
+    m, v = tf.nn.moments(inputs, [1], keep_dims=True)
+    s = tf.get_variable("s", [num_units], initializer=tf.constant_initializer(1.0))
+    b = tf.get_variable("b", [num_units], initializer=tf.constant_initializer(0.0))
+    output = tf.nn.batch_normalization(inputs, m, v, b, s, epsilon)
+    output.set_shape(input_shape)
+
+  return output
+
 
 def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
   """Multiplicated Integrated Linear map:
@@ -58,24 +71,29 @@ class HighwayGRUCell(rnn.RNNCell):
 
   def __init__(self, num_units,
                      num_highway_layers=3, forget_bias=0.0, hyper_num_units=128, hyper_embedding_size=32,
-                     use_recurrent_dropout=False, dropout_keep_prob=0.90, is_training=True):
+                     use_recurrent_dropout=False, dropout_keep_prob=0.90, use_layer_norm=True):
     self._num_units = num_units
     self.num_highway_layers = num_highway_layers
     self.use_recurrent_dropout = use_recurrent_dropout
+    self.use_layer_norm = use_layer_norm
     self.dropout_keep_prob = dropout_keep_prob
     self.forget_bias = forget_bias
-    self.is_training = is_training
     self.hyper_num_units = hyper_num_units
     self.total_num_units = self._num_units + self.hyper_num_units
     self.hyper_cell = rnn.GRUCell(hyper_num_units)
     self.hyper_embedding_size= hyper_embedding_size
     self.hyper_output = None
 
-  def _hyper_norm(self, layer, dimensions, scope="hyper"):
-    with tf.variable_scope(scope + '_z'):
-      zw = _linear(self.hyper_output, self.hyper_embedding_size, False)
-    with tf.variable_scope(scope + '_alpha'):
-      alpha = _linear(zw, dimensions, False)
+  def hyper_norm(self, layer, scope="hyper"):
+    init_gamma = 0.10
+    weight_start = init_gamma / self.hyper_embedding_size
+
+    with tf.variable_scope(scope + '_z', initializer=tf.constant_initializer(0.0)):
+      zw = _linear(self.hyper_output, self.hyper_embedding_size, True, 1.0)
+
+    with tf.variable_scope(scope + '_alpha', initializer=tf.constant_initializer(weight_start)):
+      alpha = _linear(zw, self._num_units, False)
+
     result = alpha * layer
 
     return result
@@ -92,38 +110,41 @@ class HighwayGRUCell(rnn.RNNCell):
   def state_size(self):
     return self.total_num_units
 
-  def __call__(self, inputs, state, timestep = 0, scope=None):
+  def __call__(self, inputs, state, timestep=0, scope=None):
     current_state = state[:, 0:self._num_units]
     hyper_state = state[:, self._num_units:]
 
-    for highway_layer in xrange(self.num_highway_layers):
-      with tf.variable_scope('hyper_'+str(highway_layer)):
-        if highway_layer == 0:
-          hyper_input = tf.concat([inputs, current_state], 1)
-        else:
-          hyper_input = current_state
-        self.hyper_output, hyper_state = self.hyper_cell(hyper_input, hyper_state)
+    with tf.variable_scope('hyper', initializer=tf.orthogonal_initializer()):
+      hyper_input = tf.concat([inputs, current_state], 1)
+      self.hyper_output, hyper_state = self.hyper_cell(hyper_input, hyper_state)
 
+    for highway_layer in xrange(self.num_highway_layers):
       with tf.variable_scope('h_'+str(highway_layer)):
         if highway_layer == 0:
           h = _mi_linear(inputs, current_state, self._num_units)
+          h = self.hyper_norm(h)
+
+          if self.use_layer_norm:
+            h = _layer_norm(h, self._num_units)
         else:
           h = _linear([current_state], self._num_units, True)
 
-        h = self._hyper_norm(h, self._num_units, scope="hyper_h")
-
-        if self.is_training and self.use_recurrent_dropout:
+        if self.use_recurrent_dropout:
           h = tf.nn.dropout(h, self.dropout_keep_prob)
 
         h = tf.tanh(h)
 
       with tf.variable_scope('t_'+str(highway_layer)):
         if highway_layer == 0:
-          t = tf.sigmoid(_mi_linear(inputs, current_state, self._num_units, self.forget_bias))
-        else:
-          t = tf.sigmoid(_linear([current_state], self._num_units, True, self.forget_bias))
+          t = _mi_linear(inputs, current_state, self._num_units, self.forget_bias)
+          t = self.hyper_norm(t)
 
-        t = self._hyper_norm(t, self._num_units, scope="hyper_t")
+          if self.use_layer_norm:
+            t = _layer_norm(t, self._num_units)
+        else:
+          t = _linear([current_state], self._num_units, True, self.forget_bias)
+
+        t = tf.sigmoid(t)
 
       current_state = (h - current_state) * t + current_state
 
