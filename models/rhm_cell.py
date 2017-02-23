@@ -67,7 +67,7 @@ class HighwayGRUCell(rnn.RNNCell):
   """Highway GRU Network"""
 
   def __init__(self, num_units,
-                     num_highway_layers=3, forget_bias=0.0, hyper_num_units=128, hyper_embedding_size=32,
+                     num_highway_layers=3, forget_bias=0.0, hyper_num_units=256, hyper_embedding_size=32,
                      use_recurrent_dropout=False, dropout_keep_prob=0.90, use_layer_norm=True):
     self._num_units = num_units
     self.num_highway_layers = num_highway_layers
