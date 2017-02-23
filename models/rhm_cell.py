@@ -8,7 +8,7 @@ from tensorflow.python.ops import variable_scope as vs
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
 
-def mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
+def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
   """Multiplicated Integrated Linear map:
   See http://arxiv.org/pdf/1606.06630v1.pdf
   A * (W[0] * arg1) * (W[1] * arg2) + (W[0] * arg1 * bias1) + (W[1] * arg2 * bias2) + global_bias.
@@ -85,7 +85,7 @@ class HighwayGRUCell(rnn.RNNCell):
 
       with tf.variable_scope('h_'+str(highway_layer)):
         if highway_layer == 0:
-          h = mi_linear(inputs, current_state, self._num_units, True)
+          h = _mi_linear(inputs, current_state, self._num_units)
         else:
           h = _linear([current_state], self._num_units, True)
 
@@ -96,7 +96,7 @@ class HighwayGRUCell(rnn.RNNCell):
 
       with tf.variable_scope('t_'+str(highway_layer)):
         if highway_layer == 0:
-          t = tf.sigmoid(mi_linear(inputs, current_state, self._num_units, True, self.forget_bias))
+          t = tf.sigmoid(_mi_linear(inputs, current_state, self._num_units, self.forget_bias))
         else:
           t = tf.sigmoid(_linear([current_state], self._num_units, True, self.forget_bias))
 
