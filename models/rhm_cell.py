@@ -57,7 +57,7 @@ class HighwayGRUCell(rnn.RNNCell):
   """Highway GRU Network"""
 
   def __init__(self, num_units,
-                     num_highway_layers=3, forget_bias=0.0,
+                     num_highway_layers=3, forget_bias=0.0, hyper_num_units=128, hyper_embedding_size=32,
                      use_recurrent_dropout=False, dropout_keep_prob=0.90, is_training=True):
     self._num_units = num_units
     self.num_highway_layers = num_highway_layers
@@ -65,6 +65,20 @@ class HighwayGRUCell(rnn.RNNCell):
     self.dropout_keep_prob = dropout_keep_prob
     self.forget_bias = forget_bias
     self.is_training = is_training
+    self.hyper_num_units = hyper_num_units
+    self.total_num_units = self._num_units + self.hyper_num_units
+    self.hyper_cell = rnn.GRUCell(hyper_num_units)
+    self.hyper_embedding_size= hyper_embedding_size
+    self.hyper_output = None
+
+  def _hyper_norm(self, layer, dimensions, scope="hyper"):
+    with tf.variable_scope(scope + '_z'):
+      zw = _linear(self.hyper_output, self.hyper_embedding_size, False)
+    with tf.variable_scope(scope + '_alpha'):
+      alpha = _linear(zw, dimensions, False)
+    result = alpha * layer
+
+    return result
 
   @property
   def input_size(self):
@@ -76,18 +90,27 @@ class HighwayGRUCell(rnn.RNNCell):
 
   @property
   def state_size(self):
-    return self._num_units
+    return self.total_num_units
 
   def __call__(self, inputs, state, timestep = 0, scope=None):
-    current_state = state
+    current_state = state[:, 0:self._num_units]
+    hyper_state = state[:, self._num_units:]
 
     for highway_layer in xrange(self.num_highway_layers):
+      with tf.variable_scope('hyper_'+str(highway_layer)):
+        if highway_layer == 0:
+          hyper_input = tf.concat([inputs, current_state], 1)
+        else:
+          hyper_input = current_state
+        self.hyper_output, hyper_state = self.hyper_cell(hyper_input, hyper_state)
 
       with tf.variable_scope('h_'+str(highway_layer)):
         if highway_layer == 0:
           h = _mi_linear(inputs, current_state, self._num_units)
         else:
           h = _linear([current_state], self._num_units, True)
+
+        h = self._hyper_norm(h, self._num_units, scope="hyper_h")
 
         if self.is_training and self.use_recurrent_dropout:
           h = tf.nn.dropout(h, self.dropout_keep_prob)
@@ -100,9 +123,11 @@ class HighwayGRUCell(rnn.RNNCell):
         else:
           t = tf.sigmoid(_linear([current_state], self._num_units, True, self.forget_bias))
 
+        t = self._hyper_norm(t, self._num_units, scope="hyper_t")
+
       current_state = (h - current_state) * t + current_state
 
-    return current_state, current_state
+    return current_state, tf.concat([current_state, hyper_state], 1)
 
 
 if __name__ == "__main__":
