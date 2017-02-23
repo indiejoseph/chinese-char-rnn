@@ -10,7 +10,7 @@ from rhm_cell import HighwayGRUCell
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=1000,
+               layer_depth=2, rnn_size=1000, num_units=100,
                seq_length=50, keep_prob=0.9,
                grad_clip=5.0, num_sampled=5., is_training=True):
 
@@ -23,6 +23,7 @@ class CharRNN(Model):
     self.layer_depth = layer_depth
     self.keep_prob = keep_prob
     self.batch_size = batch_size
+    self.num_units = num_units
     self.seq_length = seq_length
     self.num_sampled = num_sampled
 
@@ -35,9 +36,14 @@ class CharRNN(Model):
                             use_recurrent_dropout=True,
                             is_training=is_training)
 
+      cell = rnn.OutputProjectionWrapper(cell, num_units)
+
+      if keep_prob < 1 and is_training:
+        cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
+
       with tf.device("/cpu:0"):
         stdv = np.sqrt(1. / vocab_size)
-        self.embedding = tf.get_variable("embedding", [vocab_size, rnn_size],
+        self.embedding = tf.get_variable("embedding", [vocab_size, num_units],
                                          initializer=tf.random_uniform_initializer(-stdv, stdv))
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
@@ -51,13 +57,13 @@ class CharRNN(Model):
                                                     initial_state=self.initial_state,
                                                     dtype=tf.float32)
 
-      flat_output = tf.reshape(outputs, [-1, rnn_size])
+      flat_output = tf.reshape(outputs, [-1, num_units])
 
     with tf.variable_scope("loss"):
-      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
+      softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      loss = tf.nn.nce_loss(weights=tf.transpose(softmax_w), # weight tying
+      loss = tf.nn.nce_loss(weights=tf.transpose(softmax_w), # .T for some reason
                             biases=softmax_b,
                             inputs=flat_output,
                             labels=tf.reshape(self.targets, [-1, 1]), # Column vector
