@@ -70,19 +70,9 @@ class HighwayGRUCell(rnn.RNNCell):
     self.hyper_embedding_size= hyper_embedding_size
     self.hyper_output = None
 
-    if use_recurrent_dropout:
-      self.hyper_cell = rnn.DropoutWrapper(self.hyper_cell, output_keep_prob=dropout_keep_prob)
-
   def hyper_norm(self, layer, scope="hyper"):
-    init_gamma = 0.10
-    weight_start = init_gamma / self.hyper_embedding_size
-
-    with tf.variable_scope(scope + '_z', initializer=tf.constant_initializer(0.0)):
-      zw = _linear(self.hyper_output, self.hyper_embedding_size, True, 1.0)
-
-    with tf.variable_scope(scope + '_alpha', initializer=tf.constant_initializer(weight_start)):
-      alpha = _linear(zw, self._num_units, False)
-
+    zw = _linear(self.hyper_output, self.hyper_embedding_size, False, scope=scope+ "z")
+    alpha = _linear(zw, self._num_units, False, scope=scope+ "alpha")
     result = alpha * layer
 
     return result
