@@ -108,10 +108,10 @@ class HighwayGRUCell(rnn.RNNCell):
       with tf.variable_scope('h_'+str(highway_layer)):
         if highway_layer == 0:
           h = _mi_linear(inputs, current_state, self._num_units)
-          h = self.hyper_norm(h)
-
         else:
           h = _linear([current_state], self._num_units, True)
+
+        h = self.hyper_norm(h)
 
         if self.use_recurrent_dropout:
           h = tf.nn.dropout(h, self.dropout_keep_prob)
@@ -121,11 +121,10 @@ class HighwayGRUCell(rnn.RNNCell):
       with tf.variable_scope('t_'+str(highway_layer)):
         if highway_layer == 0:
           t = _mi_linear(inputs, current_state, self._num_units, self.forget_bias)
-          t = self.hyper_norm(t)
-
         else:
           t = _linear([current_state], self._num_units, True, self.forget_bias)
 
+        t = self.hyper_norm(t)
         t = tf.sigmoid(t)
 
       current_state = (h - current_state) * t + current_state
