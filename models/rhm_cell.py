@@ -71,9 +71,11 @@ class HighwayGRUCell(rnn.RNNCell):
     self.hyper_output = None
 
   def hyper_norm(self, layer, scope="hyper"):
-    zw = _linear(self.hyper_output, self.hyper_embedding_size, False, scope=scope+ "z")
-    alpha = _linear(zw, self._num_units, False, scope=scope+ "alpha")
-    result = alpha * layer
+    with tf.variable_scope(scope + '_z'):
+      zw = _linear(self.hyper_output, self.hyper_embedding_size, False, scope=scope+ "z")
+    with tf.variable_scope(scope + '_alpha'):
+      alpha = _linear(zw, self._num_units, False, scope=scope+ "alpha")
+      result = alpha * layer
 
     return result
 
