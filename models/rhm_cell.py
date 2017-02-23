@@ -7,17 +7,6 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
-def _layer_norm(inputs, num_units, epsilon=1e-5, scope="layer_norm"):
-  """ Layer normalizes a 2D tensor along its second axis, which corresponds to batch """
-  with tf.variable_scope(scope):
-    m, v = tf.nn.moments(inputs, [1], keep_dims=True)
-    s = tf.get_variable("s", [num_units], initializer=tf.constant_initializer(1.0))
-    b = tf.get_variable("b", [num_units], initializer=tf.constant_initializer(0.0))
-    normalised_input = (inputs - m) / tf.sqrt(v + epsilon)
-
-  return normalised_input * s + b
-
-
 def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
   """Multiplicated Integrated Linear map:
   See http://arxiv.org/pdf/1606.06630v1.pdf
@@ -121,8 +110,6 @@ class HighwayGRUCell(rnn.RNNCell):
           h = _mi_linear(inputs, current_state, self._num_units)
           h = self.hyper_norm(h)
 
-          if self.use_layer_norm:
-            h = _layer_norm(h, self._num_units)
         else:
           h = _linear([current_state], self._num_units, True)
 
@@ -136,8 +123,6 @@ class HighwayGRUCell(rnn.RNNCell):
           t = _mi_linear(inputs, current_state, self._num_units, self.forget_bias)
           t = self.hyper_norm(t)
 
-          if self.use_layer_norm:
-            t = _layer_norm(t, self._num_units)
         else:
           t = _linear([current_state], self._num_units, True, self.forget_bias)
 
