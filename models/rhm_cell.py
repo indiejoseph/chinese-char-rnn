@@ -9,16 +9,13 @@ from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
 def _layer_norm(inputs, num_units, epsilon=1e-5, scope="layer_norm"):
   """ Layer normalizes a 2D tensor along its second axis, which corresponds to batch """
-  input_shape = inputs.get_shape()
-
   with tf.variable_scope(scope):
     m, v = tf.nn.moments(inputs, [1], keep_dims=True)
     s = tf.get_variable("s", [num_units], initializer=tf.constant_initializer(1.0))
     b = tf.get_variable("b", [num_units], initializer=tf.constant_initializer(0.0))
-    output = tf.nn.batch_normalization(inputs, m, v, b, s, epsilon)
-    output.set_shape(input_shape)
+    normalised_input = (inputs - m) / tf.sqrt(v + epsilon)
 
-  return output
+  return normalised_input * s + b
 
 
 def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
