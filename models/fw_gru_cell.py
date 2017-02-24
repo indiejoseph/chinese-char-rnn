@@ -1,10 +1,14 @@
 import tensorflow as tf
+import collections
 from tensorflow.python.ops.math_ops import tanh, sigmoid
 from tensorflow.contrib import rnn
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import nn_ops
+from tensorflow.contrib.layers.python.layers import layer_norm
 from tensorflow.python.ops import variable_scope as vs
+from tensorflow.python.util import nest
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
 
@@ -52,61 +56,90 @@ def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
         initializer=init_ops.constant_initializer(global_bias_start))
   return res + global_bias_term
 
+_FastWeightTuple = collections.namedtuple("FastWeightTuple", ("h", "fw"))
 
-class HighwayGRUCell(rnn.RNNCell):
-  """Highway GRU Network"""
-
-  def __init__(self, num_units,
-                     num_highway_layers=3, forget_bias=0.0,
-                     use_recurrent_dropout=False, dropout_keep_prob=0.90, is_training=True):
-    self._num_units = num_units
-    self.num_highway_layers = num_highway_layers
-    self.use_recurrent_dropout = use_recurrent_dropout
-    self.dropout_keep_prob = dropout_keep_prob
-    self.forget_bias = forget_bias
-    self.is_training = is_training
+class FastWeightTuple(_FastWeightTuple):
+  __slots__ = ()
 
   @property
-  def input_size(self):
-    return self._num_units
+  def dtype(self):
+    (h, fw) = self
+    if not h.dtype == fw.dtype:
+      raise TypeError("Inconsistent internal state: %s vs %s" %
+                      (str(h.dtype), str(fw.dtype)))
+    return h.dtype
+
+
+class FWGRUCell(rnn.RNNCell):
+  """Gated Recurrent Unit cell (cf. http://arxiv.org/abs/1406.1078)."""
+
+  def __init__(self, num_units, step=2, learning_rate=0.5, decay_rate=0.9,
+               use_layer_norm=True, activation=tanh):
+    self._num_units = num_units
+    self._activation = activation
+    self._step = step
+    self._lr = learning_rate
+    self._decay_rate = decay_rate
+    self._use_layer_norm = use_layer_norm
+
+  @property
+  def state_size(self):
+    return FastWeightTuple(self._num_units, self._num_units * self._num_units)
 
   @property
   def output_size(self):
     return self._num_units
 
-  @property
-  def state_size(self):
-    return self._num_units
+  def _layer_norm(self, inp, scope=None):
+    reuse = tf.get_variable_scope().reuse
+    with vs.variable_scope(scope or "Norm") as scope:
+      normalized = layer_norm(inp, reuse=reuse, scope=scope)
+      return normalized
 
-  def __call__(self, inputs, state, timestep = 0, scope=None):
-    current_state = state
+  def __call__(self, inputs, state, scope=None):
+    """Gated recurrent unit (GRU) with nunits cells."""
+    with vs.variable_scope(scope or "gru_cell"):
+      state, fast_weights = state
+      fast_weights = tf.reshape(fast_weights, [-1, self._num_units, self._num_units])
 
-    for highway_layer in xrange(self.num_highway_layers):
+      with vs.variable_scope("gates"):  # Reset gate and update gate.
+        # We start with bias of 1.0 to not reset and not update.
+        r, u = array_ops.split(
+            value=_linear([inputs, state], 2 * self._num_units, True, 1.0),
+            num_or_size_splits=2,
+            axis=1)
+        r, u = sigmoid(r), sigmoid(u)
 
-      with tf.variable_scope('h_'+str(highway_layer)):
-        if highway_layer == 0:
-          h = _mi_linear(inputs, current_state, self._num_units)
-        else:
-          h = _linear([current_state], self._num_units, True)
+      with vs.variable_scope("candidate"):
+        linear = _linear([inputs, r * state], self._num_units, True)
 
-        h = tf.tanh(h)
+        if self._use_layer_norm:
+          linear = self._layer_norm(linear, scope="norm_0")
 
-        if self.is_training and self.use_recurrent_dropout:
-          h = tf.nn.dropout(h, self.dropout_keep_prob)
+        c = self._activation(linear)
+        h = u * state + (1 - u) * c
 
-      with tf.variable_scope('t_'+str(highway_layer)):
-        if highway_layer == 0:
-          t = tf.sigmoid(_mi_linear(inputs, current_state, self._num_units, self.forget_bias))
-        else:
-          t = tf.sigmoid(_linear([current_state], self._num_units, True, self.forget_bias))
+      with vs.variable_scope("fast_weights"):
+        linear = tf.reshape(h, [-1, self._num_units, 1])
+        h = tf.reshape(h, [-1, self._num_units, 1])
 
-      current_state = (h - current_state) * t + current_state
+        for i in range(self._step):
+          h = linear + tf.matmul(fast_weights, h)
 
-    return current_state, current_state
+          if self._use_layer_norm:
+            h = self._layer_norm(h, scope="norm_%d" % (i + 1))
+
+          h = self._activation(h)
+
+      state = tf.reshape(state, [-1, self._num_units, 1])
+      new_fast_weights = self._decay_rate * fast_weights + self._lr * tf.matmul(state, state, adjoint_b=True)
+      new_fast_weights = tf.reshape(new_fast_weights, [-1, self._num_units * self._num_units])
+      new_h = tf.squeeze(h, [2])
+
+    return new_h, FastWeightTuple(new_h, new_fast_weights)
 
 
 if __name__ == "__main__":
-  import numpy as np
   from tensorflow.contrib.rnn.python.ops import core_rnn
 
   batch = 3
@@ -114,7 +147,8 @@ if __name__ == "__main__":
   dim = 100
   my_inputs = tf.placeholder(tf.float32, [batch, num_steps, dim], name="my_inputs")
   my_inputs = [tf.squeeze(inp) for inp in tf.split(my_inputs, num_steps, 1)]
-  cell = HighwayGRUCell(dim, 3, use_recurrent_dropout=True)
+  cell = FWGRUCell(dim, use_layer_norm=False)
+  cell = rnn.MultiRNNCell(3 * [cell])
   initial_state = cell.zero_state(batch, tf.float32)
   finial_state = initial_state
   output, finial_state = core_rnn.static_rnn(cell, my_inputs, finial_state)
