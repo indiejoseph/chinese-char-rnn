@@ -17,7 +17,7 @@ pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("rnn_size", 512, "The dimension of char embedding matrix [512]")
+flags.DEFINE_integer("rnn_size", 1000, "The dimension of char embedding matrix [1000]")
 flags.DEFINE_integer("num_units", 100, "The dimension of char embedding matrix [100]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
 flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")

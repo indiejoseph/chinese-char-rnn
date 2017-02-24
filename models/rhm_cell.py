@@ -7,56 +7,13 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
-def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
-  """Multiplicated Integrated Linear map:
-  See http://arxiv.org/pdf/1606.06630v1.pdf
-  A * (W[0] * arg1) * (W[1] * arg2) + (W[0] * arg1 * bias1) + (W[1] * arg2 * bias2) + global_bias.
-  Args:
-    arg1: batch x n, Tensor.
-    arg2: batch x n, Tensor.
-    output_size: int, second dimension of W[i].
-  global_bias_start: starting value to initialize the global bias; 0 by default.
-    scope: VariableScope for the created subgraph; defaults to "MILinear".
-  Returns:
-    A 2D Tensor with shape [batch x output_size] equal to
-    sum_i(args[i] * W[i]), where W[i]s are newly created matrices.
-  Raises:
-    ValueError: if some of the arguments has unspecified or wrong shape.
-  """
-  if arg1 is None:
-    raise ValueError("`arg1` must be specified")
-  if arg2 is None:
-    raise ValueError("`arg2` must be specified")
-  if output_size is None:
-    raise ValueError("`output_size` must be specified")
-
-  a1_shape = arg1.get_shape().as_list()[1]
-  a2_shape = arg2.get_shape().as_list()[1]
-
-  # Computation.
-  with vs.variable_scope(scope or "MILinear"):
-    matrix1 = vs.get_variable("Matrix1", [a1_shape, output_size])
-    matrix2 = vs.get_variable("Matrix2", [a2_shape, output_size])
-    bias1 = vs.get_variable("Bias1", [1, output_size],
-                 initializer=init_ops.constant_initializer(0.5))
-    bias2 = vs.get_variable("Bias2", [1, output_size],
-                 initializer=init_ops.constant_initializer(0.5))
-    alpha = vs.get_variable("Alpha", [output_size],
-                initializer=init_ops.constant_initializer(2.0))
-    arg1mul = math_ops.matmul(arg1, matrix1)
-    arg2mul = math_ops.matmul(arg2, matrix2)
-    res = alpha * arg1mul * arg2mul + (arg1mul * bias1) + (arg2mul * bias2)
-    global_bias_term = vs.get_variable(
-        "GlobalBias", [output_size],
-        initializer=init_ops.constant_initializer(global_bias_start))
-  return res + global_bias_term
-
-
 class HighwayGRUCell(rnn.RNNCell):
-  """Highway GRU Network"""
+  """
+  Highway GRU Network with Hyper Network
+  """
 
   def __init__(self, num_units,
-                     num_highway_layers=3, forget_bias=0.0, hyper_num_units=128, hyper_embedding_size=32,
+                     num_highway_layers=3, forget_bias=0.0, hyper_num_units=128, hyper_embedding_size=4,
                      use_recurrent_dropout=False, dropout_keep_prob=0.90, use_layer_norm=True):
     self._num_units = num_units
     self.num_highway_layers = num_highway_layers
@@ -70,11 +27,11 @@ class HighwayGRUCell(rnn.RNNCell):
     self.hyper_embedding_size= hyper_embedding_size
     self.hyper_output = None
 
-  def hyper_norm(self, layer, scope="hyper"):
+  def hyper_norm(self, layer, num_units, scope="hyper_norm"):
     with tf.variable_scope(scope + '_z'):
-      zw = _linear(self.hyper_output, self.hyper_embedding_size, False, scope=scope+ "z")
+      zw = _linear(self.hyper_output, self.hyper_embedding_size, True, 1.0, scope=scope+ "z")
     with tf.variable_scope(scope + '_alpha'):
-      alpha = _linear(zw, self._num_units, False, scope=scope+ "alpha")
+      alpha = _linear(zw, num_units, False, scope=scope+ "alpha")
       result = alpha * layer
 
     return result
@@ -99,29 +56,35 @@ class HighwayGRUCell(rnn.RNNCell):
       hyper_input = tf.concat([inputs, current_state], 1)
       self.hyper_output, hyper_state = self.hyper_cell(hyper_input, hyper_state)
 
-    for highway_layer in xrange(self.num_highway_layers):
-      with tf.variable_scope('h_'+str(highway_layer)):
-        if highway_layer == 0:
-          h = _mi_linear(inputs, current_state, self._num_units)
-          h = self.hyper_norm(h)
-        else:
-          h = _linear([current_state], self._num_units, True)
+      for highway_layer in xrange(self.num_highway_layers):
+        with tf.variable_scope('gates_'+str(highway_layer)):
+          h_bias = vs.get_variable("h_bias", [2 * self._num_units], initializer=tf.constant_initializer(1.))
 
-        if self.use_recurrent_dropout:
-          h = tf.nn.dropout(h, self.dropout_keep_prob)
+          if highway_layer == 0:
+            h = _linear([inputs, current_state], 2 * self._num_units, False)
+          else:
+            h = _linear([current_state], 2 * self._num_units, False)
 
-        h = tf.tanh(h)
+          h = self.hyper_norm(h, 2 * self._num_units)
+          r_bias, u_bias = array_ops.split(value=h_bias, num_or_size_splits=2, axis=0)
+          r, u = array_ops.split(value=h, num_or_size_splits=2, axis=1)
+          r = r + r_bias
+          u = u + u_bias
 
-      with tf.variable_scope('t_'+str(highway_layer)):
-        if highway_layer == 0:
-          t = _mi_linear(inputs, current_state, self._num_units, self.forget_bias)
-          t = self.hyper_norm(t)
-        else:
-          t = _linear([current_state], self._num_units, True, self.forget_bias)
+        with vs.variable_scope("candidate_"+str(highway_layer)):
+          c_bias = vs.get_variable("c_bias", [self._num_units], initializer=tf.constant_initializer(0.0))
 
-        t = tf.sigmoid(t)
+          if highway_layer == 0:
+            c = _linear([inputs, r * current_state], self._num_units, False)
+          else:
+            c = _linear([r * current_state], self._num_units, False)
 
-      current_state = (h - current_state) * t + current_state
+          c = tf.tanh(self.hyper_norm(c, self._num_units) + c_bias)
+
+          if self.use_recurrent_dropout:
+            c = tf.nn.dropout(c, self.dropout_keep_prob)
+
+        current_state = u * current_state + (1 - u) * c
 
     return current_state, tf.concat([current_state, hyper_state], 1)
 
