@@ -89,10 +89,10 @@ class HighwayGRUCell(rnn.RNNCell):
         else:
           h = _linear([current_state], self._num_units, True)
 
+        h = tf.tanh(h)
+
         if self.is_training and self.use_recurrent_dropout:
           h = tf.nn.dropout(h, self.dropout_keep_prob)
-
-        h = tf.tanh(h)
 
       with tf.variable_scope('t_'+str(highway_layer)):
         if highway_layer == 0:
