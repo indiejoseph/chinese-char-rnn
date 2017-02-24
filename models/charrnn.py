@@ -10,7 +10,7 @@ from fw_gru_cell import FWGRUCell
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=100,
+               step=2, rnn_size=100,
                seq_length=50, keep_prob=0.9,
                grad_clip=5.0, num_sampled=5., is_training=True):
 
@@ -20,7 +20,7 @@ class CharRNN(Model):
 
     # RNN
     self.rnn_size = rnn_size
-    self.layer_depth = layer_depth
+    self.step = step
     self.keep_prob = keep_prob
     self.batch_size = batch_size
     self.seq_length = seq_length
@@ -30,12 +30,10 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm'):
-      cell = FWGRUCell(rnn_size, use_layer_norm=True)
+      cell = FWGRUCell(rnn_size, step=step, use_layer_norm=True)
 
       if keep_prob < 1 and is_training:
         cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
-
-      cell = rnn.MultiRNNCell([cell] * layer_depth)
 
       with tf.device("/cpu:0"):
         stdv = np.sqrt(1. / vocab_size)
