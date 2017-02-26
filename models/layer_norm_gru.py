@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.contrib import rnn
-from tensorflow.python.ops.math_ops import tanh
+from tensorflow.python.ops.math_ops import tanh, sigmoid
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
@@ -101,8 +101,7 @@ class LayerNormGRUCell(rnn.RNNCell):
       r, u = tf.nn.relu(r), tf.nn.relu(u)
 
     with vs.variable_scope("Candidate"):
-      c = tf.nn.relu(_mi_linear(inputs, r * state, self._num_units, self._forget_bias))
-      c = tanh(c)
+      c = tanh(_mi_linear(inputs, r * state, self._num_units, self._forget_bias))
 
     new_h = u * state + (1 - u) * c
 
