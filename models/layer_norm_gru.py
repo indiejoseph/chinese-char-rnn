@@ -1,22 +1,12 @@
 import tensorflow as tf
 from tensorflow.contrib import rnn
-from tensorflow.python.ops.math_ops import sigmoid
+from tensorflow.python.ops.math_ops import tanh
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.contrib.layers.python.layers import layers
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
-
-
-def prelu(_x):
-  alphas = tf.get_variable('alpha', _x.get_shape()[-1],
-                       initializer=tf.constant_initializer(0.0),
-                        dtype=tf.float32)
-  pos = tf.nn.relu(_x)
-  neg = alphas * (_x - abs(_x)) * 0.1
-
-  return pos + neg
 
 
 def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
@@ -108,11 +98,11 @@ class LayerNormGRUCell(rnn.RNNCell):
         r = self._norm(r, scope = 'r/')
         u = self._norm(r, scope = 'u/')
 
-      r, u = sigmoid(r), sigmoid(u)
+      r, u = tf.nn.relu(r), tf.nn.relu(u)
 
     with vs.variable_scope("Candidate"):
       c = tf.nn.relu(_mi_linear(inputs, r * state, self._num_units, self._forget_bias))
-      c = prelu(c)
+      c = tanh(c)
 
     new_h = u * state + (1 - u) * c
 
