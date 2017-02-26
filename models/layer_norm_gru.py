@@ -98,7 +98,7 @@ class LayerNormGRUCell(rnn.RNNCell):
         r = self._norm(r, scope = 'r/')
         u = self._norm(r, scope = 'u/')
 
-      r, u = tf.nn.relu(r), tf.nn.relu(u)
+      r, u = sigmoid(r), sigmoid(u)
 
     with vs.variable_scope("Candidate"):
       c = tanh(_mi_linear(inputs, r * state, self._num_units, self._forget_bias))
