@@ -30,7 +30,7 @@ class CharRNN(Model):
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
-    with tf.variable_scope('rnnlm'):
+    with tf.variable_scope('rnnlm', initializer=tf.contrib.layers.xavier_initializer()):
       cell = HighwayGRUCell(rnn_size, layer_depth,
                             dropout_keep_prob=keep_prob,
                             use_recurrent_dropout=True,
@@ -59,7 +59,7 @@ class CharRNN(Model):
 
       flat_output = tf.reshape(outputs, [-1, num_units])
 
-    with tf.variable_scope("loss"):
+    with tf.variable_scope("loss", initializer=tf.contrib.layers.xavier_initializer()):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 

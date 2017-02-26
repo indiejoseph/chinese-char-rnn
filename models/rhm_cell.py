@@ -1,11 +1,22 @@
 import tensorflow as tf
-from tensorflow.python.ops.math_ops import tanh, sigmoid
 from tensorflow.contrib import rnn
+from tensorflow.python.ops.math_ops import sigmoid
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import variable_scope as vs
+from tensorflow.contrib.layers.python.layers import layers
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
+
+
+def prelu(_x):
+  alphas = tf.get_variable('alpha', _x.get_shape()[-1],
+                       initializer=tf.constant_initializer(0.0),
+                        dtype=tf.float32)
+  pos = tf.nn.relu(_x)
+  neg = alphas * (_x - abs(_x)) * 0.1
+
+  return pos + neg
 
 
 def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
@@ -58,13 +69,18 @@ class HighwayGRUCell(rnn.RNNCell):
 
   def __init__(self, num_units,
                      num_highway_layers=3, forget_bias=0.0,
-                     use_recurrent_dropout=False, dropout_keep_prob=0.90, is_training=True):
+                     use_recurrent_dropout=False, dropout_keep_prob=0.90,
+                     use_layer_norm=True, norm_gain=1.0, norm_shift=0.0,
+                     is_training=True):
     self._num_units = num_units
-    self.num_highway_layers = num_highway_layers
-    self.use_recurrent_dropout = use_recurrent_dropout
-    self.dropout_keep_prob = dropout_keep_prob
-    self.forget_bias = forget_bias
-    self.is_training = is_training
+    self._num_highway_layers = num_highway_layers
+    self._use_recurrent_dropout = use_recurrent_dropout
+    self._dropout_keep_prob = dropout_keep_prob
+    self._forget_bias = forget_bias
+    self._is_training = is_training
+    self._use_layer_norm = use_layer_norm
+    self._g = norm_gain
+    self._b = norm_shift
 
   @property
   def input_size(self):
@@ -78,29 +94,50 @@ class HighwayGRUCell(rnn.RNNCell):
   def state_size(self):
     return self._num_units
 
+  def _norm(self, inp, scope):
+    shape = inp.get_shape()[-1:]
+    gamma_init = init_ops.constant_initializer(self._g)
+    beta_init = init_ops.constant_initializer(self._b)
+    with vs.variable_scope(scope):
+      # Initialize beta and gamma for use by layer_norm.
+      vs.get_variable("gamma", shape=shape, initializer=gamma_init)
+      vs.get_variable("beta", shape=shape, initializer=beta_init)
+    normalized = layers.layer_norm(inp, reuse=True, scope=scope)
+    return normalized
+
   def __call__(self, inputs, state, timestep = 0, scope=None):
     current_state = state
 
-    for highway_layer in xrange(self.num_highway_layers):
+    for highway_layer in xrange(self._num_highway_layers):
 
       with tf.variable_scope('h_'+str(highway_layer)):
-        if highway_layer == 0:
-          h = _mi_linear(inputs, current_state, self._num_units)
-        else:
-          h = _linear([current_state], self._num_units, True)
+        with vs.variable_scope("Gates"):  # Reset gate and update gate.
+          if highway_layer == 0:
+            h = _mi_linear(inputs, current_state, self._num_units * 2, 1.0)
+          else:
+            h = _linear([current_state], self._num_units * 2, True, 1.0)
 
-        h = tf.tanh(h)
+          r, u = array_ops.split(h, num_or_size_splits=2, axis=1)
 
-        if self.is_training and self.use_recurrent_dropout:
-          h = tf.nn.dropout(h, self.dropout_keep_prob)
+          # Apply Layer Normalization to the two gates
+          if self._use_layer_norm:
+            r = self._norm(r, scope = 'r/')
+            u = self._norm(r, scope = 'u/')
 
-      with tf.variable_scope('t_'+str(highway_layer)):
-        if highway_layer == 0:
-          t = tf.sigmoid(_mi_linear(inputs, current_state, self._num_units, self.forget_bias))
-        else:
-          t = tf.sigmoid(_linear([current_state], self._num_units, True, self.forget_bias))
+          r, u = sigmoid(r), sigmoid(u)
 
-      current_state = (h - current_state) * t + current_state
+        with vs.variable_scope("Candidate"):
+          if highway_layer == 0:
+            c = tf.nn.relu(_mi_linear(inputs, r * current_state, self._num_units, self._forget_bias))
+          else:
+            c = tf.nn.relu(_linear([r * current_state], self._num_units, True, self._forget_bias))
+
+          c = prelu(c)
+
+        if self._is_training and self._use_recurrent_dropout:
+          c = tf.nn.dropout(c, self._dropout_keep_prob)
+
+      current_state = u * current_state + (1 - u) * c
 
     return current_state, current_state
 

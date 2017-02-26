@@ -6,7 +6,7 @@ import codecs
 import collections
 import cPickle
 import numpy as np
-
+import opencc
 
 PAD = "_PAD"
 GO = "_GO"
@@ -40,17 +40,20 @@ def normalize_punctuation(text):
           [u'《', u'〈', u'＜'],
           [u'》', u'〉', u'＞'],
           [u'﹑'],
-          [u'【', u'『', u'〔'],
-          [u'】', u'』', u'〕'],
+          [u'【', u'『', u'〔', u'﹝', u'｢', u'﹁'],
+          [u'】', u'』', u'〕', u'﹞', u'｣', u'﹂'],
           [u'（', u'「'],
           [u'）', u'」'],
           [u'﹖'],
           [u'︰', u'﹕'],
-          [u'・', u'．', u'·', u'･', u'‧'],
+          [u'・', u'．', u'·', u'‧', u'°'],
           [u'●', u'○', u'▲', u'◎', u'◇', u'■', u'□', u'※', u'◆'],
           [u'〜', u'～', u'∼'],
-          [u'—', u'ー', u'―', u'‐', u'−', u'─', u'﹣', u'–']]
-  epun = [u' ', u'！', u'"', u'"', u'\'', u';', u'<', u'>', u'、', u'[', u']', u'(', u')', u'？', u'：', u'･', u'•', u'~', u'-']
+          [u'︱', u'│', u'┼'],
+          [u'╱'],
+          [u'╲'],
+          [u'—', u'ー', u'―', u'‐', u'−', u'─', u'﹣', u'–', u'ㄧ']]
+  epun = [u' ', u'！', u'"', u'"', u'\'', u';', u'<', u'>', u'、', u'[', u']', u'(', u')', u'？', u'：', u'･', u'•', u'~', u'|', u'/', u'\\', u'-']
   repls = {}
 
   for i in xrange(len(cpun)):
@@ -74,7 +77,7 @@ def Q2B(uchar):
 
 
 class TextLoader():
-  def __init__(self, data_dir, batch_size, seq_length, encoding="utf-8"):
+  def __init__(self, data_dir, batch_size, seq_length, forece_reload=False, encoding="utf-8"):
     self.data_dir = data_dir
     self.batch_size = batch_size
     self.seq_length = seq_length
@@ -86,7 +89,7 @@ class TextLoader():
     vdata_file = os.path.join(data_dir, "valid.npy")
     valid_file = os.path.join(data_dir, "valid.txt")
 
-    if not (os.path.exists(vocab_file) and os.path.exists(tensor_file)):
+    if (forece_reload or not (os.path.exists(vocab_file) and os.path.exists(tensor_file))):
       print "reading text file"
       self.preprocess(input_file, vocab_file, tensor_file, vdata_file, valid_file)
     else:
@@ -98,15 +101,19 @@ class TextLoader():
   def preprocess(self, input_file, vocab_file, tensor_file, vdata_file, valid_file):
     with codecs.open(input_file, "r", encoding=self.encoding) as f:
       train_data = f.read()
+      train_data = opencc.convert(train_data, config='s2t.json')
       train_data = normalize_unicodes(train_data)
+
     with codecs.open(valid_file, "r", encoding=self.encoding) as f:
       valid_data = f.read()
+      valid_data = opencc.convert(valid_data, config='s2t.json')
       valid_data = normalize_unicodes(valid_data)
+
     counter = collections.Counter(train_data)
     count_pairs = sorted(counter.items(), key=lambda x: -x[1])
-    self.chars, counts = zip(*count_pairs)
     threshold = 10
-    self.chars = START_VOCAB + [c for i, c in enumerate(self.chars) if counts[i] > threshold and c not in START_VOCAB]
+    self.chars, counts = zip(*count_pairs)
+    self.chars = START_VOCAB + [c for i, c in enumerate(self.chars) if c not in START_VOCAB and counts[i] > threshold]
     self.vocab_size = len(self.chars)
     self.vocab = dict(zip(self.chars, range(len(self.chars))))
     with open(vocab_file, 'wb') as f:
@@ -160,3 +167,7 @@ class TextLoader():
 
   def reset_batch_pointer(self):
     self.pointer = 0
+
+
+if __name__ == '__main__':
+  data_loader = TextLoader(os.path.join('./data', 'news'), 30, 25, forece_reload=True)
