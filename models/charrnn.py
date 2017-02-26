@@ -10,7 +10,7 @@ from rhm_cell import HighwayGRUCell
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, rnn_size=1000, num_units=100,
+               layer_depth=2, num_units=100,
                seq_length=50, keep_prob=0.9,
                grad_clip=5.0, num_sampled=5., is_training=True):
 
@@ -19,7 +19,6 @@ class CharRNN(Model):
     self.is_training = is_training
 
     # RNN
-    self.rnn_size = rnn_size
     self.layer_depth = layer_depth
     self.keep_prob = keep_prob
     self.batch_size = batch_size
@@ -31,7 +30,7 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm', initializer=tf.contrib.layers.xavier_initializer()):
-      cell = HighwayGRUCell(rnn_size, layer_depth,
+      cell = HighwayGRUCell(num_units, layer_depth,
                             dropout_keep_prob=keep_prob,
                             use_recurrent_dropout=True,
                             is_training=is_training)
