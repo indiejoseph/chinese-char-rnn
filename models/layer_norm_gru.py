@@ -10,11 +10,10 @@ from tensorflow.contrib.rnn.python.ops.core_rnn_cell_impl import _linear
 
 class LayerNormGRUCell(rnn.RNNCell):
   def __init__(self, num_units,
-                     num_highway_layers=3, forget_bias=0.0,
+                     num_highway_layers=3,
                      use_layer_norm=True, norm_gain=1.0, norm_shift=0.0):
     self._num_units = num_units
     self._num_highway_layers = num_highway_layers
-    self._forget_bias = forget_bias
     self._use_layer_norm = use_layer_norm
     self._g = norm_gain
     self._b = norm_shift
@@ -44,8 +43,11 @@ class LayerNormGRUCell(rnn.RNNCell):
 
   def __call__(self, inputs, state, timestep = 0, scope=None):
     with vs.variable_scope("Gates"):  # Reset gate and update gate.
-      h = _linear([inputs, state], self._num_units * 2, True, 1.0)
-      r, u = array_ops.split(h, num_or_size_splits=2, axis=1)
+      r, u = array_ops.split(
+        value=_linear(
+            [inputs, state], 2 * self._num_units, True, 1.0),
+        num_or_size_splits=2,
+        axis=1)
 
       # Apply Layer Normalization to the two gates
       if self._use_layer_norm:
@@ -55,7 +57,7 @@ class LayerNormGRUCell(rnn.RNNCell):
       r, u = sigmoid(r), sigmoid(u)
 
     with vs.variable_scope("Candidate"):
-      c = tanh(_linear([inputs, r * state], self._num_units, True, self._forget_bias))
+      c = tanh(_linear([inputs, r * state], self._num_units, True))
 
     new_h = u * state + (1 - u) * c
 
