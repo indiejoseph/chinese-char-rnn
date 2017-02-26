@@ -6,7 +6,6 @@ import codecs
 import collections
 import cPickle
 import numpy as np
-import opencc
 
 PAD = "_PAD"
 GO = "_GO"
@@ -101,12 +100,10 @@ class TextLoader():
   def preprocess(self, input_file, vocab_file, tensor_file, vdata_file, valid_file):
     with codecs.open(input_file, "r", encoding=self.encoding) as f:
       train_data = f.read()
-      train_data = opencc.convert(train_data, config='s2t.json')
       train_data = normalize_unicodes(train_data)
 
     with codecs.open(valid_file, "r", encoding=self.encoding) as f:
       valid_data = f.read()
-      valid_data = opencc.convert(valid_data, config='s2t.json')
       valid_data = normalize_unicodes(valid_data)
 
     counter = collections.Counter(train_data)
