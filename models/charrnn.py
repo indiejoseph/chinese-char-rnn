@@ -5,6 +5,7 @@ import math
 
 from base import Model
 from tensorflow.contrib import rnn
+from tensorflow.contrib import legacy_seq2seq
 from layer_norm_gru import LayerNormGRUCell
 
 
@@ -12,7 +13,7 @@ class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, num_units=100,
                seq_length=50, keep_prob=0.9,
-               grad_clip=5.0, num_sampled=5., is_training=True):
+               grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
 
@@ -24,7 +25,6 @@ class CharRNN(Model):
     self.batch_size = batch_size
     self.num_units = num_units
     self.seq_length = seq_length
-    self.num_sampled = num_sampled
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
@@ -53,19 +53,18 @@ class CharRNN(Model):
                                                     swap_memory=True,
                                                     initial_state=self.initial_state,
                                                     dtype=tf.float32)
-
-      flat_output = tf.reshape(outputs, [-1, num_units])
+      output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
 
     with tf.variable_scope("loss", initializer=tf.contrib.layers.xavier_initializer()):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      loss = tf.nn.nce_loss(weights=tf.transpose(softmax_w), # .T for some reason
-                            biases=softmax_b,
-                            inputs=flat_output,
-                            labels=tf.reshape(self.targets, [-1, 1]), # Column vector
-                            num_sampled=num_sampled,
-                            num_classes=vocab_size)
+      self.logits = tf.matmul(output, softmax_w) + softmax_b
+      self.probs = tf.nn.softmax(self.logits)
+
+      loss = legacy_seq2seq.sequence_loss_by_example([self.logits],
+                [tf.reshape(self.targets, [-1])],
+                [tf.ones([batch_size * seq_length])], vocab_size)
 
       self.cost = tf.reduce_sum(loss) / batch_size / seq_length
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
@@ -74,7 +73,7 @@ class CharRNN(Model):
 
     tvars = tf.trainable_variables()
     grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
-    optimizer = tf.train.GradientDescentOptimizer(self.lr)
+    optimizer = tf.train.AdamOptimizer(self.lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
 
