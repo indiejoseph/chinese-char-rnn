@@ -5,7 +5,7 @@ import math
 
 from base import Model
 from tensorflow.contrib import rnn
-from rhm_cell import HighwayGRUCell
+from layer_norm_gru import LayerNormGRUCell
 
 
 class CharRNN(Model):
@@ -30,15 +30,13 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm', initializer=tf.contrib.layers.xavier_initializer()):
-      cell = HighwayGRUCell(num_units, layer_depth,
-                            dropout_keep_prob=keep_prob,
-                            use_recurrent_dropout=True,
-                            is_training=is_training)
+      cell = LayerNormGRUCell(num_units, layer_depth)
 
-      cell = rnn.OutputProjectionWrapper(cell, num_units)
+      if is_training and keep_prob < 1:
+        cell = rnn.DropoutWrapper(cell, keep_prob)
 
-      if keep_prob < 1 and is_training:
-        cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
+      if layer_depth > 1:
+        cell = rnn.MultiRNNCell(layer_depth * [cell])
 
       with tf.device("/cpu:0"):
         stdv = np.sqrt(1. / vocab_size)

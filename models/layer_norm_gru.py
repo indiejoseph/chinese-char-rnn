@@ -64,20 +64,13 @@ def _mi_linear(arg1, arg2, output_size, global_bias_start=0.0, scope=None):
   return res + global_bias_term
 
 
-class HighwayGRUCell(rnn.RNNCell):
-  """Highway GRU Network"""
-
+class LayerNormGRUCell(rnn.RNNCell):
   def __init__(self, num_units,
                      num_highway_layers=3, forget_bias=0.0,
-                     use_recurrent_dropout=False, dropout_keep_prob=0.90,
-                     use_layer_norm=True, norm_gain=1.0, norm_shift=0.0,
-                     is_training=True):
+                     use_layer_norm=True, norm_gain=1.0, norm_shift=0.0):
     self._num_units = num_units
     self._num_highway_layers = num_highway_layers
-    self._use_recurrent_dropout = use_recurrent_dropout
-    self._dropout_keep_prob = dropout_keep_prob
     self._forget_bias = forget_bias
-    self._is_training = is_training
     self._use_layer_norm = use_layer_norm
     self._g = norm_gain
     self._b = norm_shift
@@ -106,52 +99,38 @@ class HighwayGRUCell(rnn.RNNCell):
     return normalized
 
   def __call__(self, inputs, state, timestep = 0, scope=None):
-    current_state = state
+    with vs.variable_scope("Gates"):  # Reset gate and update gate.
+      h = _mi_linear(inputs, state, self._num_units * 2, 1.0)
+      r, u = array_ops.split(h, num_or_size_splits=2, axis=1)
 
-    for highway_layer in xrange(self._num_highway_layers):
+      # Apply Layer Normalization to the two gates
+      if self._use_layer_norm:
+        r = self._norm(r, scope = 'r/')
+        u = self._norm(r, scope = 'u/')
 
-      with tf.variable_scope('h_'+str(highway_layer)):
-        with vs.variable_scope("Gates"):  # Reset gate and update gate.
-          if highway_layer == 0:
-            h = _mi_linear(inputs, current_state, self._num_units * 2, 1.0)
-          else:
-            h = _linear([current_state], self._num_units * 2, True, 1.0)
+      r, u = sigmoid(r), sigmoid(u)
 
-          r, u = array_ops.split(h, num_or_size_splits=2, axis=1)
+    with vs.variable_scope("Candidate"):
+      c = tf.nn.relu(_mi_linear(inputs, r * state, self._num_units, self._forget_bias))
+      c = prelu(c)
 
-          # Apply Layer Normalization to the two gates
-          if self._use_layer_norm:
-            r = self._norm(r, scope = 'r/')
-            u = self._norm(r, scope = 'u/')
+    new_h = u * state + (1 - u) * c
 
-          r, u = sigmoid(r), sigmoid(u)
-
-        with vs.variable_scope("Candidate"):
-          if highway_layer == 0:
-            c = tf.nn.relu(_mi_linear(inputs, r * current_state, self._num_units, self._forget_bias))
-          else:
-            c = tf.nn.relu(_linear([r * current_state], self._num_units, True, self._forget_bias))
-
-          c = prelu(c)
-
-        if self._is_training and self._use_recurrent_dropout:
-          c = tf.nn.dropout(c, self._dropout_keep_prob)
-
-      current_state = u * current_state + (1 - u) * c
-
-    return current_state, current_state
+    return new_h, new_h
 
 
 if __name__ == "__main__":
   import numpy as np
   from tensorflow.contrib.rnn.python.ops import core_rnn
+  from tensorflow.contrib import rnn
 
   batch = 3
   num_steps = 10
   dim = 100
   my_inputs = tf.placeholder(tf.float32, [batch, num_steps, dim], name="my_inputs")
   my_inputs = [tf.squeeze(inp) for inp in tf.split(my_inputs, num_steps, 1)]
-  cell = HighwayGRUCell(dim, 3, use_recurrent_dropout=True)
+  cell = LayerNormGRUCell(dim)
+  cell = rnn.MultiRNNCell(3 * [cell])
   initial_state = cell.zero_state(batch, tf.float32)
   finial_state = initial_state
   output, finial_state = core_rnn.static_rnn(cell, my_inputs, finial_state)
