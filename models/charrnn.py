@@ -29,7 +29,7 @@ class CharRNN(Model):
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
-    with tf.variable_scope('rnnlm', initializer=tf.contrib.layers.xavier_initializer()):
+    with tf.variable_scope('rnnlm'):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
@@ -64,7 +64,7 @@ class CharRNN(Model):
                                                        scope='rnnlm')
       output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
 
-    with tf.variable_scope("loss", initializer=tf.contrib.layers.xavier_initializer()):
+    with tf.variable_scope("loss"):
       self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
