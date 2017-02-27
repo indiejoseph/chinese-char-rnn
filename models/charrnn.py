@@ -5,8 +5,8 @@ import math
 
 from base import Model
 from tensorflow.contrib import rnn
+from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib import legacy_seq2seq
-from layer_norm_gru import LayerNormGRUCell
 
 
 class CharRNN(Model):
@@ -30,7 +30,7 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm', initializer=tf.contrib.layers.xavier_initializer()):
-      cell = LayerNormGRUCell(num_units, layer_depth, use_layer_norm=is_training)
+      cell = rnn.GRUCell(num_units)
 
       if is_training and keep_prob < 1:
         cell = rnn.DropoutWrapper(cell, keep_prob)
@@ -39,9 +39,10 @@ class CharRNN(Model):
         self.cell = cell = rnn.MultiRNNCell(layer_depth * [cell])
 
       with tf.device("/cpu:0"):
-        stdv = np.sqrt(1. / vocab_size)
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units])
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+
+      inputs = batch_norm(inputs, is_training=is_training)
 
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 

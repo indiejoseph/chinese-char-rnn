@@ -24,7 +24,7 @@ flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")
 flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
 flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
-flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
+flags.DEFINE_float("keep_prob", 0.75, "Dropout rate [0.75]")
 flags.DEFINE_float("grad_clip", 2.0, "Grad clip [2.0]")
 flags.DEFINE_float("early_stopping", 5, "early stop after the perplexity has been "
                                         "detoriating after this many steps. If 0 (the "
