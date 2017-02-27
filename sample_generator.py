@@ -29,12 +29,12 @@ def beam_sample(net, sess, chars, vocab, max_length=200, prime='The ',
                 beam_width = 2, relevance=3.0, temperature=1.0):
     prime = prime.decode('utf-8')
     states = [initial_state(net, sess), initial_state(net, sess)]
-    states = forward_text(net, sess, states, vocab, prime)
+    states = forward_text(net, sess, states, vocab, prime[:-1])
     computer_response_generator = beam_search_generator(sess=sess, net=net,
-            initial_state=copy.deepcopy(states), initial_sample=vocab[' '],
+            initial_state=copy.deepcopy(states), initial_sample=vocab[prime[-1]],
             early_term_token=vocab['\n'], beam_width=beam_width, forward_model_fn=forward_with_mask,
             forward_args=(relevance, vocab['\n']), temperature=temperature)
-    ret = prime
+    ret = prime[:-1]
     for i, char_token in enumerate(computer_response_generator):
         ret = ret + chars[char_token]
         states = forward_text(net, sess, states, vocab, chars[char_token])
