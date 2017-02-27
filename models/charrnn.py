@@ -50,12 +50,12 @@ class CharRNN(Model):
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope("output"):
-      outputs, self.final_state = tf.nn.dynamic_rnn(cell,
-                                                    inputs,
-                                                    time_major=False,
-                                                    swap_memory=True,
-                                                    initial_state=self.initial_state,
-                                                    dtype=tf.float32)
+      outputs, last_state = tf.nn.dynamic_rnn(cell,
+                                              inputs,
+                                              time_major=False,
+                                              swap_memory=True,
+                                              initial_state=self.initial_state,
+                                              dtype=tf.float32)
       output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
 
     with tf.variable_scope("loss"):
