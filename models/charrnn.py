@@ -44,9 +44,9 @@ class CharRNN(Model):
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units])
         inputs = tf.split(tf.nn.embedding_lookup(self.embedding, self.input_data), seq_length, 1)
+        inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
         if is_training and keep_prob < 1:
           inputs = [tf.nn.dropout(input_, keep_prob) for input_ in inputs]
-        inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
@@ -55,12 +55,14 @@ class CharRNN(Model):
         prev = tf.matmul(prev, softmax_w) + softmax_b
         prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
         return tf.nn.embedding_lookup(self.embedding, prev_symbol)
-
-      outputs, last_state = legacy_seq2seq.rnn_decoder(inputs,
-                                                       self.initial_state,
-                                                       cell,
-                                                       loop_function=loop if not is_training else None,
-                                                       scope='rnnlm')
+if is_training and keep_prob < 1:
+  inputs = [tf.nn.dropout(input_, keep_prob) for input_ in inputs]
+      outputs, self.final_state = tf.nn.dynamic_rnn(cell,
+                                                    inputs,
+                                                    time_major=False,
+                                                    swap_memory=True,
+                                                    initial_state=self.initial_state,
+                                                    dtype=tf.float32)
       output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
 
     with tf.variable_scope("loss"):
