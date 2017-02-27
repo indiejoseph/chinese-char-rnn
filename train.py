@@ -183,18 +183,18 @@ def main(_):
               valid_costs += res["cost"]
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
-              if valid_perplexity < best_val_pp:
-                best_val_pp = valid_perplexity
-                best_val_epoch = iterate
+            if valid_perplexity < best_val_pp:
+              best_val_pp = valid_perplexity
+              best_val_epoch = iterate
 
-                # save best model
-                train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-                print "model saved to {}".format(FLAGS.checkpoint_dir)
+              # save best model
+              train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
+              print "model saved to {}".format(FLAGS.checkpoint_dir)
 
-              # early_stopping
-              if iterate - best_val_epoch > FLAGS.early_stopping:
-                print 'Total time: {}'.format(time.time() - start)
-                break
+            # early_stopping
+            if iterate - best_val_epoch > FLAGS.early_stopping:
+              print 'Total time: {}'.format(time.time() - start)
+              break
 
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
