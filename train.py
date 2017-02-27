@@ -94,23 +94,21 @@ def main(_):
   valid_size = 50
   valid_window = 100
 
-  with tf.name_scope('training'):
+  with tf.variable_scope('model'):
     train_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.keep_prob,
                           FLAGS.grad_clip,
                           is_training=True)
 
-  tf.get_variable_scope().reuse_variables()
-
-  with tf.name_scope('sample'):
+  with tf.variable_scope('model', reuse=True):
     simple_model = CharRNN(vocab_size, 1,
                           FLAGS.layer_depth, FLAGS.num_units,
                           1, FLAGS.keep_prob,
                           FLAGS.grad_clip,
                           is_training=False)
 
-  with tf.name_scope('validation'):
+  with tf.variable_scope('model', reuse=True):
     valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.keep_prob,
