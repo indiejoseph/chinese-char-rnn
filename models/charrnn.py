@@ -51,12 +51,6 @@ class CharRNN(Model):
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope("output"):
-      def loop(prev, _):
-        prev = tf.matmul(prev, softmax_w) + softmax_b
-        prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
-        return tf.nn.embedding_lookup(self.embedding, prev_symbol)
-if is_training and keep_prob < 1:
-  inputs = [tf.nn.dropout(input_, keep_prob) for input_ in inputs]
       outputs, self.final_state = tf.nn.dynamic_rnn(cell,
                                                     inputs,
                                                     time_major=False,
