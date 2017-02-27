@@ -26,7 +26,7 @@ flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
 flags.DEFINE_float("keep_prob", 0.75, "Dropout rate [0.75]")
 flags.DEFINE_float("grad_clip", 2.0, "Grad clip [2.0]")
-flags.DEFINE_float("early_stopping", 5, "early stop after the perplexity has been "
+flags.DEFINE_float("early_stopping", 2, "early stop after the perplexity has been "
                                         "detoriating after this many steps. If 0 (the "
                                         "default), do not stop early.")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
@@ -183,19 +183,6 @@ def main(_):
               valid_costs += res["cost"]
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
-            if valid_perplexity < best_val_pp:
-              best_val_pp = valid_perplexity
-              best_val_epoch = iterate
-
-              # save best model
-              train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-              print "model saved to {}".format(FLAGS.checkpoint_dir)
-
-            # early_stopping
-            if iterate - best_val_epoch > FLAGS.early_stopping:
-              print 'Total time: {}'.format(time.time() - start)
-              break
-
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
 
@@ -237,6 +224,19 @@ def main(_):
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
+
+        if valid_perplexity < best_val_pp:
+          best_val_pp = valid_perplexity
+          best_val_epoch = iterate
+
+          # save best model
+          train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
+          print "model saved to {}".format(FLAGS.checkpoint_dir)
+
+        # early_stopping
+        if iterate - best_val_epoch > FLAGS.early_stopping:
+          print 'Total time: {}'.format(time.time() - start)
+          break
 
 
 if __name__ == '__main__':

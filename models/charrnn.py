@@ -30,6 +30,9 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm', initializer=tf.contrib.layers.xavier_initializer()):
+      softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
+      softmax_b = tf.get_variable("softmax_b", [vocab_size])
+
       cell = rnn.GRUCell(num_units)
 
       if is_training and keep_prob < 1:
@@ -41,24 +44,26 @@ class CharRNN(Model):
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units])
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
-
-      inputs = batch_norm(inputs, is_training=is_training)
+        inputs = batch_norm(inputs, is_training=is_training)
+        inputs = tf.split(tf.nn.embedding_lookup(self.embedding, self.input_data), seq_length, 1)
+        inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope("output"):
-      outputs, self.final_state = tf.nn.dynamic_rnn(cell,
-                                                    inputs,
-                                                    time_major=False,
-                                                    swap_memory=True,
-                                                    initial_state=self.initial_state,
-                                                    dtype=tf.float32)
+      def loop(prev, _):
+        prev = tf.matmul(prev, softmax_w) + softmax_b
+        prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
+        return tf.nn.embedding_lookup(self.embedding, prev_symbol)
+
+      outputs, last_state = legacy_seq2seq.rnn_decoder(inputs,
+                                                       self.initial_state,
+                                                       cell,
+                                                       loop_function=loop if not is_training else None,
+                                                       scope='rnnlm')
       output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
 
     with tf.variable_scope("loss", initializer=tf.contrib.layers.xavier_initializer()):
-      softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
-      softmax_b = tf.get_variable("softmax_b", [vocab_size])
-
       self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
@@ -67,6 +72,7 @@ class CharRNN(Model):
                 [tf.ones([batch_size * seq_length])], vocab_size)
 
       self.cost = tf.reduce_sum(loss) / batch_size / seq_length
+      self.final_state = last_state
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
     self.lr = tf.Variable(0.0, trainable=False)
