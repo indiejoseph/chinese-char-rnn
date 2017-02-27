@@ -36,7 +36,7 @@ class CharRNN(Model):
         cell = rnn.DropoutWrapper(cell, keep_prob)
 
       if layer_depth > 1:
-        cell = rnn.MultiRNNCell(layer_depth * [cell])
+        self.cell = cell = rnn.MultiRNNCell(layer_depth * [cell])
 
       with tf.device("/cpu:0"):
         stdv = np.sqrt(1. / vocab_size)
@@ -75,6 +75,13 @@ class CharRNN(Model):
     optimizer = tf.train.GradientDescentOptimizer(self.lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
+  def forward_model(self, sess, state, input_sample):
+    '''Run a forward pass. Return the updated hidden state and the output probabilities.'''
+    shaped_input = np.array([[input_sample]], np.float32)
+    inputs = {self.input_data: shaped_input,
+              self.initial_state: state}
+    [probs, state] = sess.run([self.probs, self.final_state], feed_dict=inputs)
+    return probs[0], state
 
 if __name__ == "__main__":
   model = CharRNN()

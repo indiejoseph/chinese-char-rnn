@@ -11,6 +11,7 @@ import pprint
 import string
 import sys
 from models.charrnn import CharRNN
+from sample_generator import beam_sample
 from utils import TextLoader, normalize_unicodes, UNK_ID
 
 pp = pprint.PrettyPrinter()
@@ -25,6 +26,9 @@ flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
 flags.DEFINE_float("grad_clip", 2.0, "Grad clip [2.0]")
+flags.DEFINE_float("early_stopping", 5, "early stop after the perplexity has been "
+                                        "detoriating after this many steps. If 0 (the "
+                                        "default), do not stop early.")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
@@ -52,52 +56,6 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
   similarity = tf.matmul(valid_embeddings, normalized_embeddings, transpose_b=True)
 
   return similarity, valid_examples, valid_dataset
-
-
-def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1):
-  state = None
-  prime = prime.decode('utf-8')
-
-  for char in prime[:-1]:
-    x = np.zeros((1, 1))
-    x[0, 0] = vocab.get(char, UNK_ID)
-    feed = {model.input_data: x}
-
-    if state is not None:
-      feed[model.initial_state] = state
-
-    [state] = sess.run([model.final_state], feed)
-
-  def weighted_pick(weights):
-    t = np.cumsum(weights)
-    s = np.sum(weights)
-    return int(np.searchsorted(t, np.random.rand(1)*s))
-
-  ret = prime
-  char = prime[-1]
-
-  for _ in xrange(num):
-    x = np.zeros((1, 1))
-    x[0, 0] = vocab.get(char, 0)
-    feed = {model.input_data: x, model.initial_state: state}
-    [probs, state] = sess.run([model.probs, model.final_state], feed)
-    p = probs[0]
-
-    if sampling_type == 0:
-        sample = np.argmax(p)
-    elif sampling_type == 2:
-        if char == ' ':
-            sample = weighted_pick(p)
-        else:
-            sample = np.argmax(p)
-    else: # sampling_type == 1 default:
-        sample = weighted_pick(p)
-
-    pred = chars[sample]
-    ret += pred
-    char = pred
-
-  return ret
 
 
 def run_epochs(sess, x, y, state, model, is_training=True):
@@ -162,6 +120,10 @@ def main(_):
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
 
+    best_val_pp = float('inf')
+    best_val_epoch = 0
+    start = time.time()
+
     if FLAGS.sample:
       # load checkpoints
       if simple_model.load(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name):
@@ -206,6 +168,7 @@ def main(_):
           train_iters += 1
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
+          iterate = e * data_loader.num_batches + b
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = None
@@ -220,15 +183,28 @@ def main(_):
               valid_costs += res["cost"]
               valid_perplexity = np.exp(valid_costs / valid_iters)
 
+              if valid_perplexity < best_val_pp:
+                best_val_pp = valid_perplexity
+                best_val_epoch = iterate
+
+                # save best model
+                train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
+                print "model saved to {}".format(FLAGS.checkpoint_dir)
+
+              # early_stopping
+              if iterate - best_val_epoch > FLAGS.early_stopping:
+                print 'Total time: {}'.format(time.time() - start)
+                break
+
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
 
             log_str = ""
             # Generate sample
-            smp1 = gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 2, "我喜歡做")
-            smp2 = gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 2, "他吃飯時會用")
-            smp3 = gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 2, "人類總要重複同樣的")
-            smp4 = gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 2, "天色暗了，好像快要")
+            smp1 = beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 5, "我喜歡做")
+            smp2 = beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 5, "他吃飯時會用")
+            smp3 = beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 5, "人類總要重複同樣的")
+            smp4 = beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 5, "天色暗了，好像快要")
 
             log_str = log_str + smp1 + "\n"
             log_str = log_str + smp2 + "\n"
@@ -261,9 +237,6 @@ def main(_):
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
-
-        train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-        print "model saved to {}".format(FLAGS.checkpoint_dir)
 
 
 if __name__ == '__main__':
