@@ -133,7 +133,7 @@ def main(_):
         sys.exit(1)
 
       sample = normalize_unicodes(FLAGS.sample)
-      print gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 200, sample)
+      print beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 100, sample)
 
     elif FLAGS.export:
       print "Eval..."
