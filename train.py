@@ -11,7 +11,7 @@ import pprint
 import string
 import sys
 from models.charrnn import CharRNN
-from utils import TextLoader
+from utils import TextLoader, normalize_unicodes, UNK_ID
 
 pp = pprint.PrettyPrinter()
 
@@ -29,6 +29,7 @@ flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
+flags.DEFINE_string("sample", "", "sample")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
@@ -51,6 +52,53 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
   similarity = tf.matmul(valid_embeddings, normalized_embeddings, transpose_b=True)
 
   return similarity, valid_examples, valid_dataset
+
+
+def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1):
+  state = None
+  prime = prime.decode('utf-8')
+
+  for char in prime[:-1]:
+    x = np.zeros((1, 1))
+    x[0, 0] = vocab.get(char, UNK_ID)
+    feed = {model.input_data: x}
+
+    if state is not None:
+      feed[model.initial_state] = state
+
+    [state] = sess.run([model.final_state], feed)
+
+  def weighted_pick(weights):
+    t = np.cumsum(weights)
+    s = np.sum(weights)
+    return int(np.searchsorted(t, np.random.rand(1)*s))
+
+  ret = prime
+  char = prime[-1]
+
+  for _ in xrange(num):
+    x = np.zeros((1, 1))
+    x[0, 0] = vocab.get(char, 0)
+    feed = {model.input_data: x, model.initial_state: state}
+    [probs, state] = sess.run([model.probs, model.final_state], feed)
+    p = probs[0]
+
+    if sampling_type == 0:
+        sample = np.argmax(p)
+    elif sampling_type == 2:
+        if char == ' ':
+            sample = weighted_pick(p)
+        else:
+            sample = np.argmax(p)
+    else: # sampling_type == 1 default:
+        sample = weighted_pick(p)
+
+    pred = chars[sample]
+    ret += pred
+    char = pred
+
+  return ret
+
 
 def run_epochs(sess, x, y, state, model, is_training=True):
   start = time.time()
@@ -97,6 +145,13 @@ def main(_):
 
   tf.get_variable_scope().reuse_variables()
 
+  with tf.name_scope('sample'):
+    simple_model = CharRNN(vocab_size, 1,
+                          FLAGS.layer_depth, FLAGS.num_units,
+                          1, FLAGS.keep_prob,
+                          FLAGS.grad_clip,
+                          is_training=False)
+
   with tf.name_scope('validation'):
     valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.num_units,
@@ -107,7 +162,18 @@ def main(_):
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
 
-    if FLAGS.export:
+    if FLAGS.sample:
+      # load checkpoints
+      if simple_model.load(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name):
+        print " [*] SUCCESS to load model for %s." % FLAGS.dataset_name
+      else:
+        print " [!] Failed to load model for %s." % FLAGS.dataset_name
+        sys.exit(1)
+
+      sample = normalize_unicodes(FLAGS.sample)
+      print gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 200, sample)
+
+    elif FLAGS.export:
       print "Eval..."
       final_embeddings = train_model.embedding.eval(sess)
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
@@ -157,9 +223,20 @@ def main(_):
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
 
+            log_str = ""
+            # Generate sample
+            smp1 = gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 2, "我喜歡做")
+            smp2 = gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 2, "他吃飯時會用")
+            smp3 = gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 2, "人類總要重複同樣的")
+            smp4 = gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 2, "天色暗了，好像快要")
+
+            log_str = log_str + smp1 + "\n"
+            log_str = log_str + smp2 + "\n"
+            log_str = log_str + smp3 + "\n"
+            log_str = log_str + smp4 + "\n"
+
             # Write a similarity log
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
-            log_str = ""
             sim = similarity.eval()
             for i in xrange(valid_size):
               valid_word = data_loader.chars[valid_examples[i]]

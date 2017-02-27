@@ -19,10 +19,6 @@ class LayerNormGRUCell(rnn.RNNCell):
     self._b = norm_shift
 
   @property
-  def input_size(self):
-    return self._num_units
-
-  @property
   def output_size(self):
     return self._num_units
 
@@ -41,25 +37,27 @@ class LayerNormGRUCell(rnn.RNNCell):
     normalized = layers.layer_norm(inp, reuse=True, scope=scope)
     return normalized
 
-  def __call__(self, inputs, state, timestep = 0, scope=None):
-    with vs.variable_scope("Gates"):  # Reset gate and update gate.
-      r, u = array_ops.split(
-        value=_linear(
-            [inputs, state], 2 * self._num_units, True, 1.0),
-        num_or_size_splits=2,
-        axis=1)
+  def __call__(self, inputs, state, scope=None):
+    """Gated recurrent unit (GRU) with nunits cells."""
+    with vs.variable_scope(scope or "gru_cell"):
+      with vs.variable_scope("gates"):  # Reset gate and update gate.
+        r, u = array_ops.split(
+          value=_linear(
+              [inputs, state], 2 * self._num_units, True, 1.0),
+          num_or_size_splits=2,
+          axis=1)
 
-      # Apply Layer Normalization to the two gates
-      if self._use_layer_norm:
-        r = self._norm(r, scope = 'r/')
-        u = self._norm(r, scope = 'u/')
+        # Apply Layer Normalization to the two gates
+        if self._use_layer_norm:
+          r = self._norm(r, scope = 'r/')
+          u = self._norm(r, scope = 'u/')
 
-      r, u = sigmoid(r), sigmoid(u)
+        r, u = sigmoid(r), sigmoid(u)
 
-    with vs.variable_scope("Candidate"):
-      c = tanh(_linear([inputs, r * state], self._num_units, True))
+      with vs.variable_scope("candidate"):
+        c = tanh(_linear([inputs, r * state], self._num_units, True))
 
-    new_h = u * state + (1 - u) * c
+      new_h = u * state + (1 - u) * c
 
     return new_h, new_h
 

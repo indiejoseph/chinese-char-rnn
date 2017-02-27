@@ -30,7 +30,7 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm', initializer=tf.contrib.layers.xavier_initializer()):
-      cell = LayerNormGRUCell(num_units, layer_depth)
+      cell = LayerNormGRUCell(num_units, layer_depth, use_layer_norm=is_training)
 
       if is_training and keep_prob < 1:
         cell = rnn.DropoutWrapper(cell, keep_prob)
@@ -40,8 +40,7 @@ class CharRNN(Model):
 
       with tf.device("/cpu:0"):
         stdv = np.sqrt(1. / vocab_size)
-        self.embedding = tf.get_variable("embedding", [vocab_size, num_units],
-                                         initializer=tf.random_uniform_initializer(-stdv, stdv))
+        self.embedding = tf.get_variable("embedding", [vocab_size, num_units])
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
 
     self.initial_state = cell.zero_state(batch_size, tf.float32)
