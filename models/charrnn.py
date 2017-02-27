@@ -52,16 +52,12 @@ class CharRNN(Model):
     self.initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.variable_scope("output"):
-      def loop(prev, _):
-        prev = tf.matmul(prev, softmax_w) + softmax_b
-        prev_symbol = tf.stop_gradient(tf.argmax(prev, 1))
-        return tf.nn.embedding_lookup(self.embedding, prev_symbol)
-
-      outputs, last_state = legacy_seq2seq.rnn_decoder(inputs,
-                                                       self.initial_state,
-                                                       cell,
-                                                       loop_function=loop if not is_training else None,
-                                                       scope='rnnlm')
+      outputs, self.final_state = tf.nn.dynamic_rnn(cell,
+                                                    inputs,
+                                                    time_major=False,
+                                                    swap_memory=True,
+                                                    initial_state=self.initial_state,
+                                                    dtype=tf.float32)
       output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
 
     with tf.variable_scope("loss"):
