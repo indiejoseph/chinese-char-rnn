@@ -36,7 +36,7 @@ class CharRNN(Model):
       cell = rnn.GRUCell(num_units)
 
       if is_training and keep_prob < 1:
-        cell = rnn.DropoutWrapper(cell, keep_prob)
+        cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
       if layer_depth > 1:
         self.cell = cell = rnn.MultiRNNCell(layer_depth * [cell])
@@ -44,6 +44,8 @@ class CharRNN(Model):
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units])
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
+        if is_training and keep_prob < 1:
+          inputs = tf.nn.dropout(inputs, keep_prob)
         inputs = tf.split(tf.nn.embedding_lookup(self.embedding, self.input_data), seq_length, 1)
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
