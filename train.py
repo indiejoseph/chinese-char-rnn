@@ -26,6 +26,7 @@ flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
 flags.DEFINE_float("keep_prob", 0.75, "Dropout rate [0.75]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip [5.0]")
+flags.DEFINE_float("num_sampled", 70, "Number of sampled for softmax")
 flags.DEFINE_float("early_stopping", 2, "early stop after the perplexity has been "
                                         "detoriating after this many steps. If 0 (the "
                                         "default), do not stop early.")
@@ -98,21 +99,21 @@ def main(_):
     train_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
+                          FLAGS.grad_clip, FLAGS.num_sampled,
                           is_training=True)
 
   with tf.variable_scope('model', reuse=True):
     simple_model = CharRNN(vocab_size, 1,
                           FLAGS.layer_depth, FLAGS.num_units,
                           1, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
+                          FLAGS.grad_clip, FLAGS.num_sampled,
                           is_training=False)
 
   with tf.variable_scope('model', reuse=True):
     valid_model = CharRNN(vocab_size, FLAGS.batch_size,
                           FLAGS.layer_depth, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
+                          FLAGS.grad_clip, FLAGS.num_sampled,
                           is_training=False)
 
   with tf.Session() as sess:

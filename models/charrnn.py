@@ -14,18 +14,19 @@ class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                layer_depth=2, num_units=100,
                seq_length=50, keep_prob=0.9,
-               grad_clip=5.0, is_training=True):
+               grad_clip=5.0, num_sampled=70, is_training=True):
 
     Model.__init__(self)
 
-    self.is_training = is_training
+    self._is_training = is_training
 
     # RNN
-    self.layer_depth = layer_depth
-    self.keep_prob = keep_prob
-    self.batch_size = batch_size
-    self.num_units = num_units
-    self.seq_length = seq_length
+    self._layer_depth = layer_depth
+    self._keep_prob = keep_prob
+    self._batch_size = batch_size
+    self._num_units = num_units
+    self._seq_length = seq_length
+    self._num_sampled = num_sampled
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
@@ -34,7 +35,7 @@ class CharRNN(Model):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      cell = FLSTMCell(num_units, num_units, num_proj=num_units, fnon_linearity=tf.nn.relu)
+      cell = rnn.BasicLSTMCell(num_units, state_is_tuple=True)
 
       if is_training and keep_prob < 1:
         cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
@@ -63,9 +64,8 @@ class CharRNN(Model):
       self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
-      loss = legacy_seq2seq.sequence_loss_by_example([self.logits],
-                [tf.reshape(self.targets, [-1])],
-                [tf.ones([batch_size * seq_length])], vocab_size)
+      loss = tf.nn.sampled_softmax_loss(tf.transpose(softmax_w), softmax_b, tf.reshape(self.targets, [-1, 1]), output,
+                                        num_sampled, vocab_size)
 
       self.cost = tf.reduce_sum(loss) / batch_size / seq_length
       self.final_state = last_state
