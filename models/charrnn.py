@@ -8,7 +8,7 @@ from tensorflow.contrib import rnn
 from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib import legacy_seq2seq
 # from adaptive_softmax import adaptive_softmax_loss
-from model_utils import FLSTMCell
+from lstm import BNLSTMCell
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
@@ -35,7 +35,7 @@ class CharRNN(Model):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      cell = rnn.BasicLSTMCell(rnn_size, state_is_tuple=True)
+      cell = BNLSTMCell(rnn_size, training=is_training)
 
       if is_training and keep_prob < 1:
         cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
@@ -82,13 +82,34 @@ class CharRNN(Model):
     optimizer = tf.train.AdamOptimizer(self.lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
-  def forward_model(self, sess, state, input_sample):
-    '''Run a forward pass. Return the updated hidden state and the output probabilities.'''
-    shaped_input = np.array([[input_sample]], np.float32)
-    inputs = {self.input_data: shaped_input,
-              self.initial_state: state}
-    [probs, state] = sess.run([self.probs, self.final_state], feed_dict=inputs)
-    return probs[0], state
+  def sample(self, sess, chars, vocab, UNK_ID, num=200, prime='The '):
+    state = sess.run(self.cell.zero_state(1, tf.float32))
+    for char in prime[:-1]:
+      x = np.zeros((1, 1))
+      x[0, 0] = vocab.get(char, UNK_ID)
+      feed = {self.input_data: x, self.initial_state:state}
+      [state] = sess.run([self.final_state], feed)
+
+    def weighted_pick(weights):
+      t = np.cumsum(weights)
+      s = np.sum(weights)
+      return(int(np.searchsorted(t, np.random.rand(1)*s)))
+
+    ret = prime
+    char = prime[-1]
+    for _ in range(num):
+      x = np.zeros((1, 1))
+      x[0, 0] = vocab[char]
+      feed = {self.input_data: x, self.initial_state:state}
+      [probs, state] = sess.run([self.probs, self.final_state], feed)
+      p = probs[0]
+
+      sample = weighted_pick(p)
+
+      pred = chars[sample]
+      ret += pred
+      char = pred
+    return ret
 
 if __name__ == "__main__":
   model = CharRNN()

@@ -11,7 +11,6 @@ import pprint
 import string
 import sys
 from models.charrnn import CharRNN
-from sample_generator import beam_sample
 from utils import TextLoader, normalize_unicodes, UNK_ID
 
 pp = pprint.PrettyPrinter()
@@ -123,18 +122,7 @@ def main(_):
     best_val_epoch = 0
     start = time.time()
 
-    if FLAGS.sample:
-      # load checkpoints
-      if simple_model.load(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name):
-        print " [*] SUCCESS to load model for %s." % FLAGS.dataset_name
-      else:
-        print " [!] Failed to load model for %s." % FLAGS.dataset_name
-        sys.exit(1)
-
-      sample = normalize_unicodes(FLAGS.sample)
-      print beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 100, sample)
-
-    elif FLAGS.export:
+    if FLAGS.export:
       print "Eval..."
       final_embeddings = train_model.embedding.eval(sess)
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
@@ -188,11 +176,12 @@ def main(_):
               .format(valid_perplexity, valid_time_batch)
 
             log_str = ""
+
             # Generate sample
-            smp1 = beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 5, "我喜歡做")
-            smp2 = beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 5, "他吃飯時會用")
-            smp3 = beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 5, "人類總要重複同樣的")
-            smp4 = beam_sample(simple_model, sess, data_loader.chars, data_loader.vocab, 5, "天色暗了，好像快要")
+            smp1 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"我喜歡做")
+            smp2 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"他吃飯時會用")
+            smp3 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"人類總要重複同樣的")
+            smp4 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"天色暗了，好像快要")
 
             log_str = log_str + smp1 + "\n"
             log_str = log_str + smp2 + "\n"
