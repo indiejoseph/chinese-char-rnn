@@ -19,6 +19,7 @@ pp = pprint.PrettyPrinter()
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
 flags.DEFINE_integer("num_units", 150, "The dimension of char embedding matrix [150]")
+flags.DEFINE_integer("rnn_size", 1024, "RNN size [1024]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
 flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")
 flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
@@ -26,7 +27,6 @@ flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
 flags.DEFINE_float("keep_prob", 0.75, "Dropout rate [0.75]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip [5.0]")
-flags.DEFINE_float("num_sampled", 70, "Number of sampled for softmax")
 flags.DEFINE_float("early_stopping", 2, "early stop after the perplexity has been "
                                         "detoriating after this many steps. If 0 (the "
                                         "default), do not stop early.")
@@ -96,24 +96,24 @@ def main(_):
   valid_window = 100
 
   with tf.variable_scope('model'):
-    train_model = CharRNN(vocab_size, FLAGS.batch_size,
+    train_model = CharRNN(vocab_size, FLAGS.batch_size, FLAGS.rnn_size,
                           FLAGS.layer_depth, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip, FLAGS.num_sampled,
+                          FLAGS.grad_clip,
                           is_training=True)
 
   with tf.variable_scope('model', reuse=True):
-    simple_model = CharRNN(vocab_size, 1,
+    simple_model = CharRNN(vocab_size, 1, FLAGS.rnn_size,
                           FLAGS.layer_depth, FLAGS.num_units,
                           1, FLAGS.keep_prob,
-                          FLAGS.grad_clip, FLAGS.num_sampled,
+                          FLAGS.grad_clip,
                           is_training=False)
 
   with tf.variable_scope('model', reuse=True):
-    valid_model = CharRNN(vocab_size, FLAGS.batch_size,
+    valid_model = CharRNN(vocab_size, FLAGS.batch_size, FLAGS.rnn_size,
                           FLAGS.layer_depth, FLAGS.num_units,
                           FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip, FLAGS.num_sampled,
+                          FLAGS.grad_clip,
                           is_training=False)
 
   with tf.Session() as sess:

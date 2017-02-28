@@ -12,13 +12,13 @@ from model_utils import FLSTMCell
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
-               layer_depth=2, num_units=100,
+               rnn_size=1024, layer_depth=2, num_units=100,
                seq_length=50, keep_prob=0.9,
-               grad_clip=5.0, num_sampled=70, is_training=True):
+               grad_clip=5.0, is_training=True):
 
     Model.__init__(self)
 
-    self._is_training = is_training
+    self.is_training = is_training
 
     # RNN
     self._layer_depth = layer_depth
@@ -26,7 +26,7 @@ class CharRNN(Model):
     self._batch_size = batch_size
     self._num_units = num_units
     self._seq_length = seq_length
-    self._num_sampled = num_sampled
+    self._rnn_size = rnn_size
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
@@ -35,13 +35,16 @@ class CharRNN(Model):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      cell = rnn.BasicLSTMCell(num_units, state_is_tuple=True)
+      cell = rnn.BasicLSTMCell(rnn_size, state_is_tuple=True)
 
       if is_training and keep_prob < 1:
         cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
       if layer_depth > 1:
-        self.cell = cell = rnn.MultiRNNCell(layer_depth * [cell], state_is_tuple=True)
+        cell = rnn.MultiRNNCell(layer_depth * [cell], state_is_tuple=True)
+
+      cell = rnn.OutputProjectionWrapper(cell, num_units)
+      self.cell = cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units])
@@ -64,8 +67,9 @@ class CharRNN(Model):
       self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
-      loss = tf.nn.sampled_softmax_loss(tf.transpose(softmax_w), softmax_b, tf.reshape(self.targets, [-1, 1]), output,
-                                        num_sampled, vocab_size)
+      loss = legacy_seq2seq.sequence_loss_by_example([self.logits],
+                [tf.reshape(self.targets, [-1])],
+                [tf.ones([batch_size * seq_length])], vocab_size)
 
       self.cost = tf.reduce_sum(loss) / batch_size / seq_length
       self.final_state = last_state
