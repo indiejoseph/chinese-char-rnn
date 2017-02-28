@@ -33,13 +33,13 @@ class CharRNN(Model):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      cell = rnn.GRUCell(num_units)
+      cell = rnn.BasicLSTMCell(num_units, state_is_tuple=True)
 
       if is_training and keep_prob < 1:
         cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
       if layer_depth > 1:
-        self.cell = cell = rnn.MultiRNNCell(layer_depth * [cell])
+        self.cell = cell = rnn.MultiRNNCell(layer_depth * [cell], state_is_tuple=True)
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units])

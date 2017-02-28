@@ -179,7 +179,9 @@ def main(_):
               valid_iters += 1
               valid_cost += res["cost"]
               valid_costs += res["cost"]
-              valid_perplexity = np.exp(valid_costs / valid_iters)
+
+            valid_cost = valid_cost / data_loader.num_valid_batches
+            valid_perplexity = np.exp(valid_costs / valid_iters)
 
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
@@ -218,7 +220,7 @@ def main(_):
           print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, (valid_cost / data_loader.num_valid_batches), train_perplexity, valid_perplexity,
+                      e, train_cost, valid_cost, train_perplexity, valid_perplexity,
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
