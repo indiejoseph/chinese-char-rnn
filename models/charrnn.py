@@ -7,7 +7,8 @@ from base import Model
 from tensorflow.contrib import rnn
 from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib import legacy_seq2seq
-
+# from adaptive_softmax import adaptive_softmax_loss
+from model_utils import FLSTMCell
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
@@ -33,7 +34,7 @@ class CharRNN(Model):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      cell = rnn.BasicLSTMCell(num_units, state_is_tuple=True)
+      cell = FLSTMCell(num_units, num_units, num_proj=num_units, fnon_linearity=tf.nn.relu)
 
       if is_training and keep_prob < 1:
         cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
