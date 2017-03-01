@@ -7,7 +7,6 @@ from base import Model
 from tensorflow.contrib import rnn
 from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib import legacy_seq2seq
-from adaptive_softmax import adaptive_softmax_loss
 from lstm import BNLSTMCell
 
 class CharRNN(Model):
@@ -32,6 +31,9 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm'):
+      softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
+      softmax_b = tf.get_variable("softmax_b", [vocab_size])
+
       cell = BNLSTMCell(rnn_size, training=is_training)
 
       if is_training and keep_prob < 1:
@@ -61,9 +63,12 @@ class CharRNN(Model):
       output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
 
     with tf.variable_scope("loss"):
-      labels = tf.reshape(self.targets, [-1])
-      cutoff = [2000, vocab_size]
-      loss, training_losses = adaptive_softmax_loss(output, labels, cutoff)
+      self.logits = tf.matmul(output, softmax_w) + softmax_b
+      self.probs = tf.nn.softmax(self.logits)
+
+      loss = legacy_seq2seq.sequence_loss_by_example([self.logits],
+                [tf.reshape(self.targets, [-1])],
+                [tf.ones([batch_size * seq_length])], vocab_size)
 
       self.cost = tf.reduce_sum(loss) / batch_size / seq_length
       self.final_state = last_state
@@ -72,10 +77,38 @@ class CharRNN(Model):
     self.lr = tf.Variable(0.0, trainable=False)
 
     tvars = tf.trainable_variables()
-    grads = tf.gradients([tf.reduce_sum(loss) / batch_size for loss in training_losses], tvars)
-    grads = [tf.clip_by_norm(grad, grad_clip) if grad is not None else grad for grad in grads]
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
     optimizer = tf.train.AdamOptimizer(self.lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
+
+  def sample(self, sess, chars, vocab, UNK_ID, num=200, prime='The '):
+    state = sess.run(self.cell.zero_state(1, tf.float32))
+    for char in prime[:-1]:
+      x = np.zeros((1, 1))
+      x[0, 0] = vocab.get(char, UNK_ID)
+      feed = {self.input_data: x, self.initial_state:state}
+      [state] = sess.run([self.final_state], feed)
+
+    def weighted_pick(weights):
+      t = np.cumsum(weights)
+      s = np.sum(weights)
+      return(int(np.searchsorted(t, np.random.rand(1)*s)))
+
+    ret = prime
+    char = prime[-1]
+    for _ in range(num):
+      x = np.zeros((1, 1))
+      x[0, 0] = vocab[char]
+      feed = {self.input_data: x, self.initial_state:state}
+      [probs, state] = sess.run([self.probs, self.final_state], feed)
+      p = probs[0]
+
+      sample = weighted_pick(p)
+
+      pred = chars[sample]
+      ret += pred
+      char = pred
+    return ret
 
 if __name__ == "__main__":
   model = CharRNN()
