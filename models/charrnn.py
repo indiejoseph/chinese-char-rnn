@@ -32,9 +32,6 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm'):
-      softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
-      softmax_b = tf.get_variable("softmax_b", [vocab_size])
-
       cell = BNLSTMCell(rnn_size, training=is_training)
 
       if is_training and keep_prob < 1:
@@ -64,9 +61,6 @@ class CharRNN(Model):
       output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
 
     with tf.variable_scope("loss"):
-      self.logits = tf.matmul(output, softmax_w) + softmax_b
-      self.probs = tf.nn.softmax(self.logits)
-
       labels = tf.reshape(self.targets, [-1])
       cutoff = [2000, vocab_size]
       loss, training_losses = adaptive_softmax_loss(output, labels, cutoff)
