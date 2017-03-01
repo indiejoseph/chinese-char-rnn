@@ -33,7 +33,6 @@ flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
-flags.DEFINE_string("sample", "", "sample")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
@@ -179,17 +178,6 @@ def main(_):
               .format(valid_perplexity, valid_time_batch)
 
             log_str = ""
-
-            # Generate sample
-            smp1 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"我喜歡做")
-            smp2 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"他吃飯時會用")
-            smp3 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"人類總要重複同樣的")
-            smp4 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"天色暗了，好像快要")
-
-            log_str = log_str + smp1 + "\n"
-            log_str = log_str + smp2 + "\n"
-            log_str = log_str + smp3 + "\n"
-            log_str = log_str + smp4 + "\n"
 
             # Write a similarity log
             # Note that this is expensive (~20% slowdown if computed every 500 steps)

@@ -83,34 +83,5 @@ class CharRNN(Model):
     optimizer = tf.train.AdamOptimizer(self.lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
-  def sample(self, sess, chars, vocab, UNK_ID, num=200, prime='The '):
-    state = sess.run(self.cell.zero_state(1, tf.float32))
-    for char in prime[:-1]:
-      x = np.zeros((1, 1))
-      x[0, 0] = vocab.get(char, UNK_ID)
-      feed = {self.input_data: x, self.initial_state:state}
-      [state] = sess.run([self.final_state], feed)
-
-    def weighted_pick(weights):
-      t = np.cumsum(weights)
-      s = np.sum(weights)
-      return(int(np.searchsorted(t, np.random.rand(1)*s)))
-
-    ret = prime
-    char = prime[-1]
-    for _ in range(num):
-      x = np.zeros((1, 1))
-      x[0, 0] = vocab[char]
-      feed = {self.input_data: x, self.initial_state:state}
-      [probs, state] = sess.run([self.probs, self.final_state], feed)
-      p = probs[0]
-
-      sample = weighted_pick(p)
-
-      pred = chars[sample]
-      ret += pred
-      char = pred
-    return ret
-
 if __name__ == "__main__":
   model = CharRNN()
