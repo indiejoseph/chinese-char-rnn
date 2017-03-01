@@ -7,7 +7,7 @@ from base import Model
 from tensorflow.contrib import rnn
 from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib import legacy_seq2seq
-# from lstm import rnn.BasicLSTM
+from lstm import BNLSTMCell
 
 class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
@@ -34,7 +34,7 @@ class CharRNN(Model):
       softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      cell = rnn.BasicLSTMCell(rnn_size)
+      cell = BNLSTMCell(rnn_size, training=is_training)
 
       if is_training and keep_prob < 1:
         cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)

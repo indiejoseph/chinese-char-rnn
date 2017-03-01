@@ -22,10 +22,10 @@ flags.DEFINE_integer("rnn_size", 1024, "RNN size [1024]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
 flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")
 flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
-flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
+flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
-flags.DEFINE_float("grad_clip", 2.0, "Grad clip [2.0]")
+flags.DEFINE_float("grad_clip", 5.0, "Grad clip [5.0]")
 flags.DEFINE_float("early_stopping", 2, "early stop after the perplexity has been "
                                         "detoriating after this many steps. If 0 (the "
                                         "default), do not stop early.")
