@@ -7,7 +7,7 @@ from base import Model
 from tensorflow.contrib import rnn
 from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib import legacy_seq2seq
-# from adaptive_softmax import adaptive_softmax_loss
+from adaptive_softmax import adaptive_softmax_loss
 from lstm import BNLSTMCell
 
 class CharRNN(Model):
@@ -67,9 +67,9 @@ class CharRNN(Model):
       self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
-      loss = legacy_seq2seq.sequence_loss_by_example([self.logits],
-                [tf.reshape(self.targets, [-1])],
-                [tf.ones([batch_size * seq_length])], vocab_size)
+      labels = tf.reshape(self.targets, [-1])
+      cutoff = [2000, vocab_size]
+      loss, training_losses = adaptive_softmax_loss(output, labels, cutoff)
 
       self.cost = tf.reduce_sum(loss) / batch_size / seq_length
       self.final_state = last_state
@@ -78,7 +78,8 @@ class CharRNN(Model):
     self.lr = tf.Variable(0.0, trainable=False)
 
     tvars = tf.trainable_variables()
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
+    grads = tf.gradients([tf.reduce_sum(loss) / batch_size for loss in training_losses], tvars)
+    grads = [tf.clip_by_norm(grad, grad_clip) if grad is not None else grad for grad in grads]
     optimizer = tf.train.AdamOptimizer(self.lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
