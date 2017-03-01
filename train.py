@@ -11,73 +11,31 @@ import pprint
 import string
 import sys
 from models.charrnn import CharRNN
-from utils import TextLoader, normalize_unicodes
+from utils import TextLoader, normalize_unicodes, UNK_ID
 
 pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("rnn_size", 100, "The dimension of char embedding matrix [100]")
-flags.DEFINE_integer("layer_depth", 3, "Number of layers for RNN")
-flags.DEFINE_integer("batch_size", 50, "The size of batch [50]")
-flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
-flags.DEFINE_float("learning_rate", 1, "Learning rate [1]")
-flags.DEFINE_float("keep_prob", 1, "Dropout rate [1]")
-flags.DEFINE_float("zoneout", 0.9, "Zoneout rate [0.9]")
-flags.DEFINE_float("grad_clip", 5.0, "Grad clip")
+flags.DEFINE_integer("num_units", 300, "The dimension of char embedding matrix [300]")
+flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
+flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")
+flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
+flags.DEFINE_float("learning_rate", 0.001, "Learning rate [0.001]")
+flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
+flags.DEFINE_float("keep_prob", 0.1, "Dropout rate [0.1]")
+flags.DEFINE_float("grad_clip", 5.0, "Grad clip [5.0]")
+flags.DEFINE_float("early_stopping", 2, "early stop after the perplexity has been "
+                                        "detoriating after this many steps. If 0 (the "
+                                        "default), do not stop early.")
 flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
-flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("sample", "", "sample")
+flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
-
-def gen_sample(sess, model, chars, vocab, num=200, prime='The ', sampling_type=1):
-  state = None
-  prime = prime.decode('utf-8')
-
-  for char in prime[:-1]:
-    x = np.zeros((1, 1))
-    x[0, 0] = vocab[char]
-    feed = {model.input_data: x}
-
-    if state is not None:
-      feed[model.initial_states] = state
-
-    [state] = sess.run([model.final_states], feed)
-
-  def weighted_pick(weights):
-    t = np.cumsum(weights)
-    s = np.sum(weights)
-    return int(np.searchsorted(t, np.random.rand(1)*s))
-
-  ret = prime
-  char = prime[-1]
-
-  for _ in xrange(num):
-    x = np.zeros((1, 1))
-    x[0, 0] = vocab.get(char, 0)
-    feed = {model.input_data: x, model.initial_states: state}
-    [probs, state] = sess.run([model.probs, model.final_states], feed)
-    p = probs[0]
-
-    if sampling_type == 0:
-        sample = np.argmax(p)
-    elif sampling_type == 2:
-        if char == ' ':
-            sample = weighted_pick(p)
-        else:
-            sample = np.argmax(p)
-    else: # sampling_type == 1 default:
-        sample = weighted_pick(p)
-
-    pred = chars[sample]
-    ret += pred
-    char = pred
-
-  return ret
 
 
 def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
@@ -98,13 +56,13 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
 
   return similarity, valid_examples, valid_dataset
 
+
 def run_epochs(sess, x, y, state, model, is_training=True):
   start = time.time()
   feed = {model.input_data: x, model.targets: y}
 
   if state is not None:
-    for i, s in enumerate(state):
-      feed[model.initial_states[i]] = s
+    feed[model.initial_state] = state
 
   if is_training:
     extra_op = model.train_op
@@ -112,7 +70,7 @@ def run_epochs(sess, x, y, state, model, is_training=True):
     extra_op = tf.no_op()
 
   fetchs = {
-    "final_states": model.final_states,
+    "final_state": model.final_state,
     "cost": model.cost,
     "extra_op": extra_op
   }
@@ -135,44 +93,35 @@ def main(_):
   valid_size = 50
   valid_window = 100
 
-  with tf.name_scope('training'):
+  with tf.variable_scope('model'):
     train_model = CharRNN(vocab_size, FLAGS.batch_size,
-                          FLAGS.layer_depth, FLAGS.rnn_size,
-                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
-                          FLAGS.zoneout, FLAGS.grad_clip,
+                          FLAGS.layer_depth, FLAGS.num_units,
+                          FLAGS.seq_length, FLAGS.keep_prob,
+                          FLAGS.grad_clip,
                           is_training=True)
 
-  tf.get_variable_scope().reuse_variables()
-
-  with tf.name_scope('validation'):
-    valid_model = CharRNN(vocab_size, FLAGS.batch_size,
-                          FLAGS.layer_depth, FLAGS.rnn_size,
-                          FLAGS.seq_length, FLAGS.learning_rate, FLAGS.keep_prob,
-                          FLAGS.zoneout, FLAGS.grad_clip,
+  with tf.variable_scope('model', reuse=True):
+    simple_model = CharRNN(vocab_size, 1,
+                          FLAGS.layer_depth, FLAGS.num_units,
+                          1, FLAGS.keep_prob,
+                          FLAGS.grad_clip,
                           is_training=False)
 
-  with tf.name_scope('sample'):
-    simple_model = CharRNN(vocab_size, 1,
-                           FLAGS.layer_depth, FLAGS.rnn_size,
-                           1, FLAGS.learning_rate, FLAGS.keep_prob,
-                           FLAGS.zoneout, FLAGS.grad_clip,
-                           is_training=False)
+  with tf.variable_scope('model', reuse=True):
+    valid_model = CharRNN(vocab_size, FLAGS.batch_size,
+                          FLAGS.layer_depth, FLAGS.num_units,
+                          FLAGS.seq_length, FLAGS.keep_prob,
+                          FLAGS.grad_clip,
+                          is_training=False)
 
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
 
-    if FLAGS.sample:
-      # load checkpoints
-      if simple_model.load(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name):
-        print " [*] SUCCESS to load model for %s." % FLAGS.dataset_name
-      else:
-        print " [!] Failed to load model for %s." % FLAGS.dataset_name
-        sys.exit(1)
+    best_val_pp = float('inf')
+    best_val_epoch = 0
+    start = time.time()
 
-      sample = normalize_unicodes(FLAGS.sample)
-      print gen_sample(sess, simple_model, data_loader.chars, data_loader.vocab, 200, sample)
-
-    elif FLAGS.export:
+    if FLAGS.export:
       print "Eval..."
       final_embeddings = train_model.embedding.eval(sess)
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
@@ -182,6 +131,9 @@ def main(_):
     else: # Train
       current_step = 0
       similarity, valid_examples, _ = compute_similarity(train_model, valid_size, valid_window, 6)
+
+      # save hyper-parameters
+      cPickle.dump(FLAGS, open(FLAGS.log_dir + "/hyperparams.pkl", 'wb'))
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
@@ -193,15 +145,19 @@ def main(_):
         valid_costs = 0
         state = None
 
+        # decay learning rate
+        sess.run(tf.assign(train_model.lr, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
+
         # iterate by batch
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, state, train_model)
           train_cost = res["cost"]
-          state = res["final_states"]
+          state = res["final_state"]
           train_iters += 1
           train_costs += train_cost
           train_perplexity = np.exp(train_costs / train_iters)
+          iterate = e * data_loader.num_batches + b
 
           if current_step % FLAGS.valid_every == 0:
             valid_state = None
@@ -210,18 +166,32 @@ def main(_):
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
-              valid_state = res["final_states"]
+              valid_state = res["final_state"]
               valid_iters += 1
               valid_cost += res["cost"]
               valid_costs += res["cost"]
-              valid_perplexity = np.exp(valid_costs / valid_iters)
+
+            valid_cost = valid_cost / data_loader.num_valid_batches
+            valid_perplexity = np.exp(valid_costs / valid_iters)
 
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
 
+            log_str = ""
+
+            # Generate sample
+            smp1 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"我喜歡做")
+            smp2 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"他吃飯時會用")
+            smp3 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"人類總要重複同樣的")
+            smp4 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"天色暗了，好像快要")
+
+            log_str = log_str + smp1 + "\n"
+            log_str = log_str + smp2 + "\n"
+            log_str = log_str + smp3 + "\n"
+            log_str = log_str + smp4 + "\n"
+
             # Write a similarity log
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
-            log_str = ""
             sim = similarity.eval()
             for i in xrange(valid_size):
               valid_word = data_loader.chars[valid_examples[i]]
@@ -242,13 +212,23 @@ def main(_):
           print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, (valid_cost / data_loader.num_valid_batches), train_perplexity, valid_perplexity,
+                      e, train_cost, valid_cost, train_perplexity, valid_perplexity,
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
 
-        train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-        print "model saved to {}".format(FLAGS.checkpoint_dir)
+        if valid_perplexity < best_val_pp:
+          best_val_pp = valid_perplexity
+          best_val_epoch = iterate
+
+          # save best model
+          train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
+          print "model saved to {}".format(FLAGS.checkpoint_dir)
+
+        # early_stopping
+        if iterate - best_val_epoch > FLAGS.early_stopping:
+          print 'Total time: {}'.format(time.time() - start)
+          break
 
 
 if __name__ == '__main__':

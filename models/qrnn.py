@@ -1,6 +1,5 @@
 import tensorflow as tf
 import numbers
-from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib import rnn
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import tensor_util
@@ -131,8 +130,8 @@ class QRNNCell(object):
         self.zoneout = zoneout
         self.bias_init_val = bias_init_val
 
-    def __call__(self, input_):
-        input_shape = input_.get_shape().as_list()
+    def __call__(self, inputs):
+        input_shape = inputs.get_shape().as_list()
         batch_size = input_shape[0]
         fwidth = self.fwidth
         out_fmaps = self.out_fmaps
@@ -142,32 +141,32 @@ class QRNNCell(object):
         with tf.variable_scope(self.name):
           # gates: list containing gate activations (num of gates depending
           # on pool_type)
-          Z, gates = self.convolution(input_, fwidth, out_fmaps, pool_type,
-                                      zoneout)
+          Z, gates = self.convolution(inputs, fwidth, out_fmaps, pool_type, zoneout)
           # join all features (Z and gates) into Tensor at dim 2 merged
           T = tf.concat([Z] + gates, 2)
+
           # create the pooling layer
           pooling = QRNN_pooling(out_fmaps, pool_type)
-          self.initial_state = pooling.zero_state(batch_size=batch_size,
-                                                  dtype=tf.float32)
+          self.initial_state = pooling.zero_state(batch_size=batch_size, dtype=tf.float32)
+
           # encapsulate the pooling in the iterative dynamic_rnn
-          H, last_C = tf.nn.dynamic_rnn(pooling, T,
-                                        initial_state=self.initial_state)
+          H, last_C = tf.nn.dynamic_rnn(pooling, T, initial_state=self.initial_state)
           self.Z = Z
           return H, last_C
 
-    def convolution(self, input_, filter_width, out_fmaps, pool_type, zoneout_):
+    def convolution(self, inputs, filter_width, out_fmaps, pool_type, zoneout_):
         """ Applies 1D convolution along time-dimension (T) assuming input
             tensor of dim (batch_size, T, n) and returns
             (batch_size, T, out_fmaps)
-            zoneout: regularization (dropout) of F gate
+            zoneout_: regularization (dropout) of F gate
         """
-        in_shape = input_.get_shape()
+        in_shape = inputs.get_shape()
         in_fmaps = in_shape[-1]
         # num_gates = len(pool_type)
         gates = []
         # pad on the left to mask the convolution (make it causal)
-        pinput = tf.pad(input_, [[0, 0], [filter_width - 1, 0], [0, 0]])
+
+        pinput = tf.pad(inputs, [[0, 0], [filter_width - 1, 0], [0, 0]])
         with tf.variable_scope('convolutions'):
             Wz = tf.get_variable('Wz', [filter_width, in_fmaps, out_fmaps],
                                  initializer=tf.random_uniform_initializer(minval=-.05, maxval=.05))
