@@ -18,7 +18,7 @@ pp = pprint.PrettyPrinter()
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
 flags.DEFINE_integer("num_units", 300, "The dimension of char embedding matrix [300]")
-flags.DEFINE_integer("rnn_size", 512, "RNN size [512]")
+flags.DEFINE_integer("rnn_size", 1024, "RNN size [1024]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
 flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")
 flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
@@ -134,7 +134,7 @@ def main(_):
       similarity, valid_examples, _ = compute_similarity(train_model, valid_size, valid_window, 6)
 
       # save hyper-parameters
-      cPickle.dump(FLAGS, open(FLAGS.log_dir + "/hyperparams.pkl", 'wb'))
+      cPickle.dump(FLAGS.__flags, open(FLAGS.log_dir + "/hyperparams.pkl", 'wb'))
 
       # run it!
       for e in xrange(FLAGS.num_epochs):
