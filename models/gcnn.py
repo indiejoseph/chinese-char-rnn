@@ -15,8 +15,8 @@ class GCNNModel(Model):
     Model.__init__(self)
 
     filter_w = embedding_size
-    self.input_data = tf.placeholder(tf.int32, [batch_size, context_size-1], name="inputs")
-    self.targets = tf.placeholder(tf.int32, [batch_size, context_size-1], name="targets")
+    self.input_data = tf.placeholder(tf.int32, [batch_size, context_size], name="inputs")
+    self.targets = tf.placeholder(tf.int32, [batch_size, context_size], name="targets")
 
     with tf.variable_scope('gcnn'):
       softmax_w = tf.get_variable("softmax_w", [embedding_size, vocab_size])
@@ -27,7 +27,7 @@ class GCNNModel(Model):
         inputs = tf.nn.embedding_lookup(self.embedding, self.input_data)
         if is_training and keep_prob < 1:
           inputs = tf.nn.dropout(inputs, keep_prob)
-        mask_layer = np.ones((batch_size, context_size-1, embedding_size))
+        mask_layer = np.ones((batch_size, context_size, embedding_size))
         mask_layer[:,0:filter_h/2,:] = 0
         inputs *= mask_layer
 
@@ -55,7 +55,7 @@ class GCNNModel(Model):
       self.probs = tf.nn.softmax(self.logits)
       loss = legacy_seq2seq.sequence_loss_by_example([self.logits],
                 [tf.reshape(self.targets, [-1, 1])],
-                [tf.ones([batch_size * (context_size - 1)])], vocab_size)
+                [tf.ones([batch_size * context_size])], vocab_size)
 
       self.loss = tf.reduce_mean(loss)
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
@@ -65,7 +65,7 @@ class GCNNModel(Model):
     trainer = tf.train.AdamOptimizer(self.lr)
     gradients = trainer.compute_gradients(self.loss)
     clipped_gradients = [(tf.clip_by_value(_[0], -grad_clip, grad_clip), _[1]) for _ in gradients]
-    self.train_op = trainer.apply_gradients(clipped_gradients)
+    self.train_op = trainer.apply_gradients(clipped_gradients, self.global_step)
     self.perplexity = tf.exp(self.loss)
 
   def conv_op(self, fan_in, shape, name):
