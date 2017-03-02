@@ -140,10 +140,6 @@ def main(_):
       for e in xrange(FLAGS.num_epochs):
         data_loader.reset_batch_pointer()
 
-        train_iters = 0
-        valid_iters = 0
-        train_costs = 0
-        valid_costs = 0
         state = None
 
         # decay learning rate
@@ -155,9 +151,7 @@ def main(_):
           res, time_batch = run_epochs(sess, x, y, state, train_model)
           train_cost = res["cost"]
           state = res["final_state"]
-          train_iters += 1
-          train_costs += train_cost
-          train_perplexity = np.exp(train_costs / train_iters)
+          train_perplexity = np.exp(train_cost)
           iterate = e * data_loader.num_batches + b
 
           if current_step % FLAGS.valid_every == 0:
@@ -168,12 +162,10 @@ def main(_):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
                                                  valid_state, valid_model, False)
               valid_state = res["final_state"]
-              valid_iters += 1
               valid_cost += res["cost"]
-              valid_costs += res["cost"]
 
             valid_cost = valid_cost / data_loader.num_valid_batches
-            valid_perplexity = np.exp(valid_costs / valid_iters)
+            valid_perplexity = np.exp(valid_cost)
 
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
