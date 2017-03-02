@@ -31,7 +31,7 @@ class CharRNN(Model):
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
 
     with tf.variable_scope('rnnlm'):
-      softmax_w = tf.get_variable("softmax_w", [num_units, vocab_size])
+      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size])
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       cell = BNLSTMCell(rnn_size, training=is_training)
@@ -40,10 +40,7 @@ class CharRNN(Model):
         cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
       if layer_depth > 1:
-        cell = rnn.MultiRNNCell(layer_depth * [cell], state_is_tuple=True)
-
-      cell = rnn.OutputProjectionWrapper(cell, num_units)
-      self.cell = cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
+        self.cell = cell = rnn.MultiRNNCell(layer_depth * [cell], state_is_tuple=True)
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units])
@@ -60,7 +57,7 @@ class CharRNN(Model):
                                               swap_memory=True,
                                               initial_state=self.initial_state,
                                               dtype=tf.float32)
-      output = tf.reshape(tf.concat(outputs, 1), [-1, num_units])
+      output = tf.reshape(tf.concat(outputs, 1), [-1, rnn_size])
 
     with tf.variable_scope("loss"):
       self.logits = tf.matmul(output, softmax_w) + softmax_b
