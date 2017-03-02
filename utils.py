@@ -156,6 +156,10 @@ class TextLoader():
     self.x_batches = np.split(xdata.reshape(self.batch_size, -1), self.num_batches, 1)
     self.y_batches = np.split(ydata.reshape(self.batch_size, -1), self.num_batches, 1)
 
+    for i in xrange(self.num_batches):
+      self.x_batches[i] = self.x_batches[i][:,:-1]
+      self.y_batches[i] = self.y_batches[i][:,:-1]
+
   def next_batch(self):
     x = np.copy(self.x_batches[self.pointer])
     y = self.y_batches[self.pointer]

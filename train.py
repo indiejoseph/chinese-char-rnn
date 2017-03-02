@@ -10,19 +10,21 @@ import cPickle
 import pprint
 import string
 import sys
-from models.charrnn import CharRNN
+from models.gcnn import GCNNModel
 from utils import TextLoader, normalize_unicodes, UNK_ID
 
 pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("num_units", 300, "The dimension of char embedding matrix [300]")
-flags.DEFINE_integer("rnn_size", 1024, "RNN size [1024]")
-flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
-flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")
-flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
+flags.DEFINE_integer("embedding_size", 300, "The dimension of char embedding matrix [300]")
+flags.DEFINE_integer("num_layers", 10, "Number of layers for RNN [10]")
+flags.DEFINE_integer("batch_size", 64, "The size of batch [64]")
+flags.DEFINE_integer("context_size", 20, "The # of timesteps to unroll for [20]")
 flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
+flags.DEFINE_integer("filter_size", 64, "Depth of each CNN layer")
+flags.DEFINE_integer("filter_h", 5, "Height of the CNN filter")
+flags.DEFINE_integer("block_size", 5, "Size of each residual block")
 flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip [5.0]")
@@ -33,7 +35,6 @@ flags.DEFINE_integer("valid_every", 1000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
-flags.DEFINE_string("sample", "", "sample")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_boolean("export", False, "Export embedding")
 FLAGS = flags.FLAGS
@@ -58,12 +59,9 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
   return similarity, valid_examples, valid_dataset
 
 
-def run_epochs(sess, x, y, state, model, is_training=True):
+def run_epochs(sess, x, y, model, is_training=True):
   start = time.time()
   feed = {model.input_data: x, model.targets: y}
-
-  if state is not None:
-    feed[model.initial_state] = state
 
   if is_training:
     extra_op = model.train_op
@@ -71,8 +69,8 @@ def run_epochs(sess, x, y, state, model, is_training=True):
     extra_op = tf.no_op()
 
   fetchs = {
-    "final_state": model.final_state,
-    "cost": model.cost,
+    "loss": model.loss,
+    "perplexity": model.perplexity,
     "extra_op": extra_op
   }
 
@@ -89,31 +87,22 @@ def main(_):
     os.makedirs(FLAGS.checkpoint_dir)
 
   data_loader = TextLoader(os.path.join(FLAGS.data_dir, FLAGS.dataset_name),
-                           FLAGS.batch_size, FLAGS.seq_length)
+                           FLAGS.batch_size, FLAGS.context_size)
   vocab_size = data_loader.vocab_size
   valid_size = 50
   valid_window = 100
 
   with tf.variable_scope('model'):
-    train_model = CharRNN(vocab_size, FLAGS.batch_size, FLAGS.rnn_size,
-                          FLAGS.layer_depth, FLAGS.num_units,
-                          FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
-                          is_training=True)
+    train_model = GCNNModel(vocab_size, FLAGS.batch_size,
+                            FLAGS.context_size, FLAGS.num_layers, FLAGS.embedding_size,
+                            FLAGS.keep_prob, FLAGS.filter_size, FLAGS.filter_h, FLAGS.block_size,
+                            FLAGS.grad_clip, is_training=True)
 
   with tf.variable_scope('model', reuse=True):
-    simple_model = CharRNN(vocab_size, 1, FLAGS.rnn_size,
-                          FLAGS.layer_depth, FLAGS.num_units,
-                          1, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
-                          is_training=False)
-
-  with tf.variable_scope('model', reuse=True):
-    valid_model = CharRNN(vocab_size, FLAGS.batch_size, FLAGS.rnn_size,
-                          FLAGS.layer_depth, FLAGS.num_units,
-                          FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
-                          is_training=False)
+    valid_model = GCNNModel(vocab_size, FLAGS.batch_size,
+                            FLAGS.context_size, FLAGS.num_layers, FLAGS.embedding_size,
+                            FLAGS.keep_prob, FLAGS.filter_size, FLAGS.filter_h, FLAGS.block_size,
+                            FLAGS.grad_clip, is_training=False)
 
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
@@ -140,56 +129,32 @@ def main(_):
       for e in xrange(FLAGS.num_epochs):
         data_loader.reset_batch_pointer()
 
-        train_iters = 0
-        valid_iters = 0
-        train_costs = 0
-        valid_costs = 0
-        state = None
-
         # decay learning rate
         sess.run(tf.assign(train_model.lr, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
 
         # iterate by batch
         for b in xrange(data_loader.num_batches):
           x, y = data_loader.next_batch()
-          res, time_batch = run_epochs(sess, x, y, state, train_model)
-          train_cost = res["cost"]
-          state = res["final_state"]
-          train_iters += 1
-          train_costs += train_cost
-          train_perplexity = np.exp(train_costs / train_iters)
+          res, time_batch = run_epochs(sess, x, y, train_model)
+          train_loss = res["loss"]
+          train_perplexity = res["perplexity"]
           iterate = e * data_loader.num_batches + b
 
           if current_step % FLAGS.valid_every == 0:
-            valid_state = None
-            valid_cost = 0
+            valid_loss = 0
 
             for vb in xrange(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
-                                                 valid_state, valid_model, False)
-              valid_state = res["final_state"]
-              valid_iters += 1
-              valid_cost += res["cost"]
-              valid_costs += res["cost"]
+                                                 valid_model, False)
+              valid_loss += res["loss"]
 
-            valid_cost = valid_cost / data_loader.num_valid_batches
-            valid_perplexity = np.exp(valid_costs / valid_iters)
+            valid_loss = valid_loss / data_loader.num_valid_batches
+            valid_perplexity = res["perplexity"]
 
             print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
               .format(valid_perplexity, valid_time_batch)
 
             log_str = ""
-
-            # Generate sample
-            smp1 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"我喜歡做")
-            smp2 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"他吃飯時會用")
-            smp3 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"人類總要重複同樣的")
-            smp4 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"天色暗了，好像快要")
-
-            log_str = log_str + smp1 + "\n"
-            log_str = log_str + smp2 + "\n"
-            log_str = log_str + smp3 + "\n"
-            log_str = log_str + smp4 + "\n"
 
             # Write a similarity log
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
@@ -210,11 +175,11 @@ def main(_):
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
+          print "{}/{} (epoch {}) loss = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, valid_cost, train_perplexity, valid_perplexity,
-                      time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
+                      e, train_loss, valid_loss, train_perplexity, valid_perplexity,
+                      time_batch, (FLAGS.batch_size * FLAGS.context_size) / time_batch / 1000)
 
           current_step = tf.train.global_step(sess, train_model.global_step)
 
