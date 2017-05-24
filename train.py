@@ -6,7 +6,7 @@ import codecs
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.tensorboard.plugins import projector
-import cPickle
+import _pickle as  cPickle
 import pprint
 import string
 import sys
@@ -18,18 +18,19 @@ pp = pprint.PrettyPrinter()
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
 flags.DEFINE_integer("num_units", 300, "The dimension of char embedding matrix [300]")
-flags.DEFINE_integer("rnn_size", 1024, "RNN size [1024]")
-flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
-flags.DEFINE_integer("batch_size", 120, "The size of batch [120]")
-flags.DEFINE_integer("seq_length", 20, "The # of timesteps to unroll for [20]")
-flags.DEFINE_float("learning_rate", 0.002, "Learning rate [0.002]")
-flags.DEFINE_float("decay_rate", 0.9, "Decay rate for SDG")
+flags.DEFINE_integer("batch_size", 1200, "The size of batch [1200]")
+flags.DEFINE_integer("rnn_size", 1000, "RNN size [1000]")
+flags.DEFINE_integer("layer_depth", 3, "Number of layers for RNN [3]")
+flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
+flags.DEFINE_float("learning_rate", 1e-3, "Learning rate [1e-3]")
+flags.DEFINE_float("decay_rate", 0.96, "Decay rate for SDG")
+flags.DEFINE_string("rnn_type", "RWA", "RNN type")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip [5.0]")
 flags.DEFINE_float("early_stopping", 2, "early stop after the perplexity has been "
                                         "detoriating after this many steps. If 0 (the "
                                         "default), do not stop early.")
-flags.DEFINE_integer("valid_every", 1000, "Validate every")
+flags.DEFINE_integer("valid_every", 10000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
@@ -58,23 +59,17 @@ def compute_similarity(model, valid_size=16, valid_window=100, offset=0):
   return similarity, valid_examples, valid_dataset
 
 
-def run_epochs(sess, x, y, state, model, is_training=True):
+def run_epochs(sess, x, y, model, is_training=True):
   start = time.time()
-  feed = {model.input_data: x, model.targets: y}
-
-  if state is not None:
-    feed[model.initial_state] = state
+  feed = {model.input_data: x, model.targets: y, model.is_training: is_training}
 
   if is_training:
     extra_op = model.train_op
   else:
     extra_op = tf.no_op()
 
-  fetchs = {
-    "final_state": model.final_state,
-    "cost": model.cost,
-    "extra_op": extra_op
-  }
+  fetchs = {"cost": model.cost,
+            "extra_op": extra_op}
 
   res = sess.run(fetchs, feed)
   end = time.time()
@@ -85,7 +80,7 @@ def main(_):
   pp.pprint(FLAGS.__flags)
 
   if not os.path.exists(FLAGS.checkpoint_dir):
-    print " [*] Creating checkpoint directory..."
+    print(" [*] Creating checkpoint directory...")
     os.makedirs(FLAGS.checkpoint_dir)
 
   data_loader = TextLoader(os.path.join(FLAGS.data_dir, FLAGS.dataset_name),
@@ -96,37 +91,38 @@ def main(_):
 
   with tf.variable_scope('model'):
     train_model = CharRNN(vocab_size, FLAGS.batch_size, FLAGS.rnn_size,
-                          FLAGS.layer_depth, FLAGS.num_units,
+                          FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_type,
                           FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
-                          is_training=True)
-
+                          FLAGS.grad_clip)
+    learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, train_model.global_step,
+                                               data_loader.num_batches, FLAGS.grad_clip,
+                                               staircase=True)
   with tf.variable_scope('model', reuse=True):
     simple_model = CharRNN(vocab_size, 1, FLAGS.rnn_size,
-                          FLAGS.layer_depth, FLAGS.num_units,
-                          1, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
-                          is_training=False)
+                           FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_type,
+                           1, FLAGS.keep_prob,
+                           FLAGS.grad_clip)
 
   with tf.variable_scope('model', reuse=True):
     valid_model = CharRNN(vocab_size, FLAGS.batch_size, FLAGS.rnn_size,
-                          FLAGS.layer_depth, FLAGS.num_units,
+                          FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_type,
                           FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip,
-                          is_training=False)
+                          FLAGS.grad_clip)
 
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
 
     best_val_pp = float('inf')
     best_val_epoch = 0
+    valid_cost = 0
+    valid_perplexity = 0
     start = time.time()
 
     if FLAGS.export:
-      print "Eval..."
+      print("Eval...")
       final_embeddings = train_model.embedding.eval(sess)
       emb_file = os.path.join(FLAGS.data_dir, FLAGS.dataset_name, 'emb.npy')
-      print "Embedding shape: {}".format(final_embeddings.shape)
+      print("Embedding shape: {}".format(final_embeddings.shape))
       np.save(emb_file, final_embeddings)
 
     else: # Train
@@ -137,38 +133,31 @@ def main(_):
       cPickle.dump(FLAGS.__flags, open(FLAGS.log_dir + "/hyperparams.pkl", 'wb'))
 
       # run it!
-      for e in xrange(FLAGS.num_epochs):
+      for e in range(FLAGS.num_epochs):
         data_loader.reset_batch_pointer()
 
-        state = None
-
         # decay learning rate
-        sess.run(tf.assign(train_model.lr, FLAGS.learning_rate * (FLAGS.decay_rate ** e)))
+        sess.run(tf.assign(train_model.lr, learning_rate))
 
         # iterate by batch
-        for b in xrange(data_loader.num_batches):
+        for b in range(data_loader.num_batches):
           x, y = data_loader.next_batch()
-          res, time_batch = run_epochs(sess, x, y, state, train_model)
-          train_cost = res["cost"]
-          state = res["final_state"]
+          res, time_batch = run_epochs(sess, x, y, train_model)
+          train_cost = res["cost"][0]
           train_perplexity = np.exp(train_cost)
           iterate = e * data_loader.num_batches + b
 
-          if current_step % FLAGS.valid_every == 0:
-            valid_state = None
+          if current_step != 0 and current_step % FLAGS.valid_every == 0:
             valid_cost = 0
 
-            for vb in xrange(data_loader.num_valid_batches):
-              res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb],
-                                                 valid_state, valid_model, False)
-              valid_state = res["final_state"]
-              valid_cost += res["cost"]
+            for vb in range(data_loader.num_valid_batches):
+              res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb], valid_model, False)
+              valid_cost += res["cost"][0]
 
             valid_cost = valid_cost / data_loader.num_valid_batches
             valid_perplexity = np.exp(valid_cost)
 
-            print "### valid_perplexity = {:.2f}, time/batch = {:.2f}" \
-              .format(valid_perplexity, valid_time_batch)
+            print("### valid_perplexity = {:.2f}, time/batch = {:.2f}".format(valid_perplexity, valid_time_batch))
 
             log_str = ""
 
@@ -186,27 +175,27 @@ def main(_):
             # Write a similarity log
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
             sim = similarity.eval()
-            for i in xrange(valid_size):
+            for i in range(valid_size):
               valid_word = data_loader.chars[valid_examples[i]]
               top_k = 8 # number of nearest neighbors
               nearest = (-sim[i, :]).argsort()[1:top_k+1]
               log_str = log_str + "Nearest to %s:" % valid_word
-              for k in xrange(top_k):
+              for k in range(top_k):
                 close_word = data_loader.chars[nearest[k]]
                 log_str = "%s %s," % (log_str, close_word)
               log_str = log_str + "\n"
-            print log_str
+            print(log_str)
             # Write to log
             text_file = codecs.open(FLAGS.log_dir + "/similarity.txt", "w", "utf-8")
             text_file.write(log_str)
             text_file.close()
 
           # print log
-          print "{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
+          print("{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
                       e, train_cost, valid_cost, train_perplexity, valid_perplexity,
-                      time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000)
+                      time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000))
 
           current_step = tf.train.global_step(sess, train_model.global_step)
 
@@ -216,11 +205,11 @@ def main(_):
 
           # save best model
           train_model.save(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
-          print "model saved to {}".format(FLAGS.checkpoint_dir)
+          print("model saved to {}".format(FLAGS.checkpoint_dir))
 
         # early_stopping
         if iterate - best_val_epoch > FLAGS.early_stopping:
-          print 'Total time: {}'.format(time.time() - start)
+          print('Total time: {}'.format(time.time() - start))
           break
 
 
