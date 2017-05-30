@@ -1,8 +1,8 @@
 # Chinese Character-Level Language Model
-http://arxiv.org/abs/1410.4615
+Recurrent Neural Networks(LSTM, GRU, RWA) for character-level language models in Tensorflow, the task is to predict the next character given the history of previous characters in the sentence, nce-loss is used to speedup multi-class classification when vocab size is huge, dataset was web scraped from Hong Kong Apple daily
+
+### Results
+![Result](/result.jpg)
 
 ### Requirements
-tensorflow 1.0.0
-
-### Model
-* Use Recurrent Highway Networks with Adaptive softmax(https://github.com/TencentAILab/tf-adaptive-softmax-lstm-lm)
+tensorflow 1.1.0

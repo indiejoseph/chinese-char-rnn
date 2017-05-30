@@ -2,12 +2,12 @@ import sys
 import tensorflow as tf
 import numpy as np
 import math
+import inspect
 
 from models.base import Model
 from models.rwa_cell import RWACell
 from tensorflow.contrib import rnn
 from tensorflow.contrib.layers import batch_norm
-from tensorflow.contrib import legacy_seq2seq
 
 class SwitchableDropoutWrapper(rnn.DropoutWrapper):
   def __init__(self, cell, is_train, input_keep_prob=1.0, output_keep_prob=1.0, seed=None):
@@ -33,7 +33,7 @@ class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                rnn_size=1024, layer_depth=2, num_units=100,
                rnn_type="GRU", seq_length=50, keep_prob=0.9,
-               grad_clip=5.0):
+               grad_clip=5.0, nce_samples=10):
 
     Model.__init__(self)
 
@@ -44,20 +44,26 @@ class CharRNN(Model):
     self._num_units = num_units
     self._seq_length = seq_length
     self._rnn_size = rnn_size
+    self._vocab_size = vocab_size
 
     self.input_data = tf.placeholder(tf.int32, [batch_size, seq_length], name="inputs")
     self.targets = tf.placeholder(tf.int32, [batch_size, seq_length], name="targets")
     self.is_training = tf.placeholder('bool', None, name="is_training")
 
     with tf.variable_scope('rnnlm'):
-      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size], regularizer=tf.contrib.layers.l2_regularizer(scale=1e-4))
+      softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size],
+                                  initializer=tf.truncated_normal_initializer(stddev=1e-4),
+                                  regularizer=tf.contrib.layers.l2_regularizer(scale=1e-4))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
       def create_cell():
         if rnn_type == "GRU":
           cell = rnn.GRUCell(rnn_size)
         elif rnn_type == "LSTM":
-          cell = rnn.BasicLSTMCell(rnn_size)
+          if 'reuse' in inspect.signature(tf.contrib.rnn.BasicLSTMCell.__init__).parameters:
+            cell = rnn.LayerNormBasicLSTMCell(rnn_size, forget_bias=0.0, reuse=tf.get_variable_scope().reuse)
+          else:
+            cell = rnn.LayerNormBasicLSTMCell(rnn_size, forget_bias=0.0)
         elif rnn_type == "RWA":
           cell = RWACell(rnn_size)
         cell = SwitchableDropoutWrapper(cell, is_train=self.is_training)
@@ -71,30 +77,36 @@ class CharRNN(Model):
         inputs = tf.contrib.layers.dropout(inputs, keep_prob, is_training=self.is_training)
 
     with tf.variable_scope("output"):
+      self.initial_state = cell.zero_state(batch_size, tf.float32)
       outputs, last_state = tf.nn.dynamic_rnn(cell,
                                               inputs,
                                               time_major=False,
                                               swap_memory=True,
+                                              initial_state=self.initial_state,
                                               dtype=tf.float32)
       output = tf.reshape(tf.concat(outputs, 1), [-1, rnn_size])
+      labels = tf.reshape(self.targets, [-1, 1])
 
     with tf.variable_scope("loss"):
       self.logits = tf.contrib.layers.batch_norm(tf.matmul(output, softmax_w) + softmax_b, is_training=self.is_training)
       self.probs = tf.nn.softmax(self.logits)
 
-      loss = legacy_seq2seq.sequence_loss_by_example([self.logits],
-                                                     [tf.reshape(self.targets, [-1])],
-                                                     [tf.ones([batch_size * seq_length])], vocab_size)
+      loss = tf.nn.nce_loss(weights=tf.transpose(softmax_w),
+                            biases=softmax_b,
+                            labels=labels,
+                            inputs=output,
+                            num_sampled=nce_samples,
+                            num_classes=vocab_size)
 
       reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-      self.cost = (tf.reduce_sum(loss) / batch_size / seq_length) + reg_losses
+      self.loss = (tf.reduce_sum(loss) / batch_size / seq_length) + reg_losses
       self.final_state = last_state
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
     self.lr = tf.Variable(0.0, trainable=False)
 
     tvars = tf.trainable_variables()
-    grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), grad_clip)
+    grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), grad_clip)
     optimizer = tf.train.AdamOptimizer(self.lr)
     self.train_op = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)
 
@@ -103,7 +115,7 @@ class CharRNN(Model):
     for char in prime[:-1]:
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, UNK_ID)
-      feed = {self.input_data: x, self.initial_state: state, self.is_training: False}
+      feed = {self.input_data: x, self.is_training: False}
       [state] = sess.run([self.final_state], feed)
 
     def weighted_pick(weights):

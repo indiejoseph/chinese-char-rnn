@@ -6,7 +6,7 @@ import codecs
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.tensorboard.plugins import projector
-import _pickle as  cPickle
+import _pickle as cPickle
 import pprint
 import string
 import sys
@@ -16,14 +16,15 @@ from utils import TextLoader, normalize_unicodes, UNK_ID
 pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
-flags.DEFINE_integer("num_epochs", 25, "Epoch to train [25]")
-flags.DEFINE_integer("num_units", 300, "The dimension of char embedding matrix [300]")
-flags.DEFINE_integer("batch_size", 1200, "The size of batch [1200]")
+flags.DEFINE_integer("num_epochs", 50, "Epoch to train [50]")
+flags.DEFINE_integer("num_units", 100, "The dimension of char embedding matrix [100]")
+flags.DEFINE_integer("batch_size", 500, "The size of batch [500]")
 flags.DEFINE_integer("rnn_size", 1000, "RNN size [1000]")
-flags.DEFINE_integer("layer_depth", 3, "Number of layers for RNN [3]")
-flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
+flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
+flags.DEFINE_integer("seq_length", 100, "The # of timesteps to unroll for [100]")
+flags.DEFINE_integer("nce_samples", 100, "NCE sample size [100]")
 flags.DEFINE_float("learning_rate", 1e-3, "Learning rate [1e-3]")
-flags.DEFINE_float("decay_rate", 0.96, "Decay rate for SDG")
+flags.DEFINE_float("decay_rate", 0.99, "Decay rate for SDG")
 flags.DEFINE_string("rnn_type", "RWA", "RNN type")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip [5.0]")
@@ -68,7 +69,7 @@ def run_epochs(sess, x, y, model, is_training=True):
   else:
     extra_op = tf.no_op()
 
-  fetchs = {"cost": model.cost,
+  fetchs = {"loss": model.loss,
             "extra_op": extra_op}
 
   res = sess.run(fetchs, feed)
@@ -93,7 +94,7 @@ def main(_):
     train_model = CharRNN(vocab_size, FLAGS.batch_size, FLAGS.rnn_size,
                           FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_type,
                           FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip)
+                          FLAGS.grad_clip, FLAGS.nce_samples)
     learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, train_model.global_step,
                                                data_loader.num_batches, FLAGS.grad_clip,
                                                staircase=True)
@@ -114,7 +115,7 @@ def main(_):
 
     best_val_pp = float('inf')
     best_val_epoch = 0
-    valid_cost = 0
+    valid_loss = 0
     valid_perplexity = 0
     start = time.time()
 
@@ -143,19 +144,19 @@ def main(_):
         for b in range(data_loader.num_batches):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, train_model)
-          train_cost = res["cost"][0]
-          train_perplexity = np.exp(train_cost)
+          train_loss = res["loss"][0]
+          train_perplexity = np.exp(train_loss)
           iterate = e * data_loader.num_batches + b
 
           if current_step != 0 and current_step % FLAGS.valid_every == 0:
-            valid_cost = 0
+            valid_loss = 0
 
             for vb in range(data_loader.num_valid_batches):
               res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb], valid_model, False)
-              valid_cost += res["cost"][0]
+              valid_loss += res["loss"][0]
 
-            valid_cost = valid_cost / data_loader.num_valid_batches
-            valid_perplexity = np.exp(valid_cost)
+            valid_loss = valid_loss / data_loader.num_valid_batches
+            valid_perplexity = np.exp(valid_loss)
 
             print("### valid_perplexity = {:.2f}, time/batch = {:.2f}".format(valid_perplexity, valid_time_batch))
 
@@ -191,10 +192,10 @@ def main(_):
             text_file.close()
 
           # print log
-          print("{}/{} (epoch {}) cost = {:.2f}({:.2f}) train = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
+          print("{}/{} (epoch {}) loss = {:.2f}({:.2f}) perplexity(train/valid) = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
               .format(e * data_loader.num_batches + b,
                       FLAGS.num_epochs * data_loader.num_batches,
-                      e, train_cost, valid_cost, train_perplexity, valid_perplexity,
+                      e, train_loss, valid_loss, train_perplexity, valid_perplexity,
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000))
 
           current_step = tf.train.global_step(sess, train_model.global_step)
