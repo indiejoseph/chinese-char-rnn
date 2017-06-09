@@ -96,7 +96,7 @@ def main(_):
                           FLAGS.seq_length, FLAGS.keep_prob,
                           FLAGS.grad_clip, FLAGS.nce_samples)
     learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, train_model.global_step,
-                                               data_loader.num_batches, FLAGS.grad_clip,
+                                               data_loader.num_batches, FLAGS.decay_rate,
                                                staircase=True)
   with tf.variable_scope('model', reuse=True):
     simple_model = CharRNN(vocab_size, 1, FLAGS.rnn_size,
