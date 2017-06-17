@@ -4,5 +4,8 @@ Recurrent Neural Networks(LSTM, GRU, RWA) for character-level language models in
 ### Results
 ![Result](/result.jpg)
 
+## Similarity
+![Similarity](/similarity.png)
+
 ### Requirements
 tensorflow 1.1.0
