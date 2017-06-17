@@ -5,7 +5,6 @@ import time
 import codecs
 import numpy as np
 import tensorflow as tf
-from tensorflow.contrib.tensorboard.plugins import projector
 import _pickle as cPickle
 import pprint
 import string
@@ -17,21 +16,18 @@ pp = pprint.PrettyPrinter()
 
 flags = tf.app.flags
 flags.DEFINE_integer("num_epochs", 50, "Epoch to train [50]")
-flags.DEFINE_integer("num_units", 100, "The dimension of char embedding matrix [100]")
-flags.DEFINE_integer("batch_size", 500, "The size of batch [500]")
-flags.DEFINE_integer("rnn_size", 1000, "RNN size [1000]")
+flags.DEFINE_integer("num_units", 300, "The dimension of char embedding matrix [300]")
+flags.DEFINE_integer("batch_size", 1000, "The size of batch [1000]")
+flags.DEFINE_integer("rnn_size", 512, "RNN size [512]")
 flags.DEFINE_integer("layer_depth", 2, "Number of layers for RNN [2]")
-flags.DEFINE_integer("seq_length", 100, "The # of timesteps to unroll for [100]")
-flags.DEFINE_integer("nce_samples", 100, "NCE sample size [100]")
-flags.DEFINE_float("learning_rate", 1e-3, "Learning rate [1e-3]")
-flags.DEFINE_float("decay_rate", 0.99, "Decay rate for SDG")
-flags.DEFINE_string("rnn_type", "RWA", "RNN type")
+flags.DEFINE_integer("seq_length", 25, "The # of timesteps to unroll for [25]")
+flags.DEFINE_float("learning_rate", 5e-3, "Learning rate [5e-3]")
+flags.DEFINE_string("rnn_type", "RAN", "RNN type [RWA, RAN, LSTM, GRU]")
 flags.DEFINE_float("keep_prob", 0.5, "Dropout rate [0.5]")
 flags.DEFINE_float("grad_clip", 5.0, "Grad clip [5.0]")
 flags.DEFINE_float("early_stopping", 2, "early stop after the perplexity has been "
                                         "detoriating after this many steps. If 0 (the "
                                         "default), do not stop early.")
-flags.DEFINE_integer("valid_every", 10000, "Validate every")
 flags.DEFINE_string("dataset_name", "news", "The name of datasets [news]")
 flags.DEFINE_string("data_dir", "data", "The name of data directory [data]")
 flags.DEFINE_string("log_dir", "log", "Log directory [log]")
@@ -94,10 +90,8 @@ def main(_):
     train_model = CharRNN(vocab_size, FLAGS.batch_size, FLAGS.rnn_size,
                           FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_type,
                           FLAGS.seq_length, FLAGS.keep_prob,
-                          FLAGS.grad_clip, FLAGS.nce_samples)
-    learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, train_model.global_step,
-                                               data_loader.num_batches, FLAGS.grad_clip,
-                                               staircase=True)
+                          FLAGS.grad_clip)
+
   with tf.variable_scope('model', reuse=True):
     simple_model = CharRNN(vocab_size, 1, FLAGS.rnn_size,
                            FLAGS.layer_depth, FLAGS.num_units, FLAGS.rnn_type,
@@ -112,6 +106,8 @@ def main(_):
 
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
+
+    train_model.load(sess, FLAGS.checkpoint_dir, FLAGS.dataset_name)
 
     best_val_pp = float('inf')
     best_val_epoch = 0
@@ -138,58 +134,15 @@ def main(_):
         data_loader.reset_batch_pointer()
 
         # decay learning rate
-        sess.run(tf.assign(train_model.lr, learning_rate))
+        sess.run(tf.assign(train_model.lr, FLAGS.learning_rate))
 
         # iterate by batch
         for b in range(data_loader.num_batches):
           x, y = data_loader.next_batch()
           res, time_batch = run_epochs(sess, x, y, train_model)
-          train_loss = res["loss"][0]
+          train_loss = res["loss"]
           train_perplexity = np.exp(train_loss)
           iterate = e * data_loader.num_batches + b
-
-          if current_step != 0 and current_step % FLAGS.valid_every == 0:
-            valid_loss = 0
-
-            for vb in range(data_loader.num_valid_batches):
-              res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb], valid_model, False)
-              valid_loss += res["loss"][0]
-
-            valid_loss = valid_loss / data_loader.num_valid_batches
-            valid_perplexity = np.exp(valid_loss)
-
-            print("### valid_perplexity = {:.2f}, time/batch = {:.2f}".format(valid_perplexity, valid_time_batch))
-
-            log_str = ""
-
-            # Generate sample
-            smp1 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"我喜歡做")
-            smp2 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"他吃飯時會用")
-            smp3 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"人類總要重複同樣的")
-            smp4 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"天色暗了，好像快要")
-
-            log_str = log_str + smp1 + "\n"
-            log_str = log_str + smp2 + "\n"
-            log_str = log_str + smp3 + "\n"
-            log_str = log_str + smp4 + "\n"
-
-            # Write a similarity log
-            # Note that this is expensive (~20% slowdown if computed every 500 steps)
-            sim = similarity.eval()
-            for i in range(valid_size):
-              valid_word = data_loader.chars[valid_examples[i]]
-              top_k = 8 # number of nearest neighbors
-              nearest = (-sim[i, :]).argsort()[1:top_k+1]
-              log_str = log_str + "Nearest to %s:" % valid_word
-              for k in range(top_k):
-                close_word = data_loader.chars[nearest[k]]
-                log_str = "%s %s," % (log_str, close_word)
-              log_str = log_str + "\n"
-            print(log_str)
-            # Write to log
-            text_file = codecs.open(FLAGS.log_dir + "/similarity.txt", "w", "utf-8")
-            text_file.write(log_str)
-            text_file.close()
 
           # print log
           print("{}/{} (epoch {}) loss = {:.2f}({:.2f}) perplexity(train/valid) = {:.2f}({:.2f}) time/batch = {:.2f} chars/sec = {:.2f}k"\
@@ -199,6 +152,50 @@ def main(_):
                       time_batch, (FLAGS.batch_size * FLAGS.seq_length) / time_batch / 1000))
 
           current_step = tf.train.global_step(sess, train_model.global_step)
+
+        # validate
+        valid_loss = 0
+
+        for vb in range(data_loader.num_valid_batches):
+          res, valid_time_batch = run_epochs(sess, data_loader.x_valid[vb], data_loader.y_valid[vb], valid_model, False)
+          valid_loss += res["loss"]
+
+        valid_loss = valid_loss / data_loader.num_valid_batches
+        valid_perplexity = np.exp(valid_loss)
+
+        print("### valid_perplexity = {:.2f}, time/batch = {:.2f}".format(valid_perplexity, valid_time_batch))
+
+        log_str = ""
+
+        # Generate sample
+        smp1 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"我喜歡做")
+        smp2 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"他吃飯時會用")
+        smp3 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"人類總要重複同樣的")
+        smp4 = simple_model.sample(sess, data_loader.chars, data_loader.vocab, UNK_ID, 5, u"天色暗了，好像快要")
+
+        log_str = log_str + smp1 + "\n"
+        log_str = log_str + smp2 + "\n"
+        log_str = log_str + smp3 + "\n"
+        log_str = log_str + smp4 + "\n"
+
+        # Write a similarity log
+        # Note that this is expensive (~20% slowdown if computed every 500 steps)
+        sim = similarity.eval()
+        for i in range(valid_size):
+          valid_word = data_loader.chars[valid_examples[i]]
+          top_k = 8 # number of nearest neighbors
+          nearest = (-sim[i, :]).argsort()[1:top_k+1]
+          log_str = log_str + "Nearest to %s:" % valid_word
+          for k in range(top_k):
+            close_word = data_loader.chars[nearest[k]]
+            log_str = "%s %s," % (log_str, close_word)
+          log_str = log_str + "\n"
+        print(log_str)
+
+        # Write to log
+        text_file = codecs.open(FLAGS.log_dir + "/similarity.txt", "w", "utf-8")
+        text_file.write(log_str)
+        text_file.close()
 
         if valid_perplexity < best_val_pp:
           best_val_pp = valid_perplexity

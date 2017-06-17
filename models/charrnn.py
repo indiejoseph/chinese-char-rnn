@@ -6,6 +6,7 @@ import inspect
 
 from models.base import Model
 from models.rwa_cell import RWACell
+from models.ran_cell import RANCell
 from tensorflow.contrib import rnn
 from tensorflow.contrib.layers import batch_norm
 
@@ -33,7 +34,7 @@ class CharRNN(Model):
   def __init__(self, vocab_size=1000, batch_size=100,
                rnn_size=1024, layer_depth=2, num_units=100,
                rnn_type="GRU", seq_length=50, keep_prob=0.9,
-               grad_clip=5.0, nce_samples=10):
+               grad_clip=5.0):
 
     Model.__init__(self)
 
@@ -52,11 +53,10 @@ class CharRNN(Model):
 
     with tf.variable_scope('rnnlm'):
       softmax_w = tf.get_variable("softmax_w", [rnn_size, vocab_size],
-                                  initializer=tf.truncated_normal_initializer(stddev=1e-4),
-                                  regularizer=tf.contrib.layers.l2_regularizer(scale=1e-4))
+                                  initializer=tf.truncated_normal_initializer(stddev=1e-4))
       softmax_b = tf.get_variable("softmax_b", [vocab_size])
 
-      def create_cell():
+      def create_cell(device):
         if rnn_type == "GRU":
           cell = rnn.GRUCell(rnn_size)
         elif rnn_type == "LSTM":
@@ -66,10 +66,12 @@ class CharRNN(Model):
             cell = rnn.LayerNormBasicLSTMCell(rnn_size, forget_bias=0.0)
         elif rnn_type == "RWA":
           cell = RWACell(rnn_size)
-        cell = SwitchableDropoutWrapper(cell, is_train=self.is_training)
+        elif rnn_type == "RAN":
+          cell = RANCell(rnn_size, normalize=self.is_training)
+        cell = SwitchableDropoutWrapper(rnn.DeviceWrapper(cell, device="/gpu:{}".format(device)), is_train=self.is_training)
         return cell
 
-      self.cell = cell = rnn.MultiRNNCell([create_cell() for _ in range(layer_depth)], state_is_tuple=True)
+      self.cell = cell = rnn.MultiRNNCell([create_cell(i) for i in range(layer_depth)], state_is_tuple=True)
 
       with tf.device("/cpu:0"):
         self.embedding = tf.get_variable("embedding", [vocab_size, num_units])
@@ -85,21 +87,15 @@ class CharRNN(Model):
                                               initial_state=self.initial_state,
                                               dtype=tf.float32)
       output = tf.reshape(tf.concat(outputs, 1), [-1, rnn_size])
-      labels = tf.reshape(self.targets, [-1, 1])
 
     with tf.variable_scope("loss"):
-      self.logits = tf.contrib.layers.batch_norm(tf.matmul(output, softmax_w) + softmax_b, is_training=self.is_training)
+      self.logits = tf.matmul(output, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits)
 
-      loss = tf.nn.nce_loss(weights=tf.transpose(softmax_w),
-                            biases=softmax_b,
-                            labels=labels,
-                            inputs=output,
-                            num_sampled=nce_samples,
-                            num_classes=vocab_size)
+      flat_targets = tf.reshape(tf.concat(self.targets, 1), [-1])
+      loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, labels=flat_targets)
 
-      reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-      self.loss = (tf.reduce_sum(loss) / batch_size / seq_length) + reg_losses
+      self.loss = tf.reduce_mean(loss)
       self.final_state = last_state
       self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
@@ -115,7 +111,7 @@ class CharRNN(Model):
     for char in prime[:-1]:
       x = np.zeros((1, 1))
       x[0, 0] = vocab.get(char, UNK_ID)
-      feed = {self.input_data: x, self.is_training: False}
+      feed = {self.input_data: x, self.initial_state: state, self.is_training: False}
       [state] = sess.run([self.final_state], feed)
 
     def weighted_pick(weights):
